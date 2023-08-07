@@ -1,0 +1,219 @@
+#+TITLE: Reference Sequences
+#+PROPERTY:  header-args :var DIR=(file-name-directory buffer-file-name)
+
+
+* All Complete Bottlenose Mitochondria
+:PROPERTIES:
+:ID:       4b913e3c-23d3-46b9-8ec2-1294b1be89bc
+:END:
+
+All complete bottlenose mitochondria available from NCBI ([[https://www.ncbi.nlm.nih.gov/nuccore?term=txid9739%5BOrganism%3Aexp%5D%20AND%20%28is_nuccore%5Bfilter%5D%20AND%20mitochondrion%5Bfilter%5D%20AND%20%28%2216000%22%5BSLEN%5D%20%3A%20%2217000%22%5BSLEN%5D%29%29&cmd=DetailsSearch][link]]) were downloaded to
+[[./all.ncbi.complete.bottlenose.mito.fa]]. The follow search criteria were used in
+NCBI's Nucleotide database to retrieve the mitochondrial sequences:
+#+begin_example
+txid9739[Organism:exp] AND
+    (is_nuccore[filter] AND
+     mitochondrion[filter] AND
+     ("16000"[SLEN] : "17000"[SLEN]))
+#+end_example
+
+#+NAME: location-accession
+| Accession   | Location |
+|-------------+----------|
+| CM022296.1  | Unknown  |
+| NC_012059.1 | Unknown  |
+| MF669486.1  | BSEA     |
+| MF669485.1  | BSEA     |
+| EU557093.1  | Unknown  |
+| KT601207.1  | ENAP     |
+| KT601206.1  | ENAP     |
+| KT601205.1  | ENAP     |
+| KT601204.1  | ENAP     |
+| KT601203.1  | ENAP     |
+| KT601202.1  | ENAP     |
+| KT601201.1  | ENAP     |
+| KT601200.1  | ENAP     |
+| KT601199.1  | ENAP     |
+| KT601198.1  | ENAP     |
+| KT601197.1  | ENAP     |
+| KT601196.1  | ENAC     |
+| KT601195.1  | ENAC     |
+| KT601194.1  | ENAC     |
+| KT601193.1  | ENAC     |
+| KT601192.1  | ENAC     |
+| KT601191.1  | ENAC     |
+| KT601190.1  | ENAC     |
+| KT601189.1  | ENAC     |
+| KT601188.1  | ENAC     |
+| KF570389.1  | GC       |
+| KF570388.1  | WNAP     |
+| KF570387.1  | WNAP     |
+| KF570386.1  | WNAP     |
+| KF570385.1  | WNAP     |
+| KF570384.1  | WNAP     |
+| KF570383.1  | WNAP     |
+| KF570382.1  | WNAP     |
+| KF570381.1  | WNAP     |
+| KF570380.1  | WNAP     |
+| KF570379.1  | WNAP     |
+| KF570378.1  | WNAC     |
+| KF570377.1  | WNAC     |
+| KF570376.1  | WNAC     |
+| KF570375.1  | WNAC     |
+| KF570374.1  | WNAC     |
+| KF570373.1  | WNAC     |
+| KF570372.1  | WNAC     |
+| KF570371.1  | WNAC     |
+| KF570370.1  | WNAC     |
+| KF570352.1  | SCO      |
+| KF570351.1  | SCO      |
+| KF570350.1  | SCO      |
+| KF570349.1  | SCO      |
+| KF570348.1  | SCO      |
+| KF570347.1  | SCO      |
+| KF570346.1  | SCO      |
+| KF570345.1  | SCO      |
+| KF570334.1  | BSEA     |
+| KF570333.1  | BSEA     |
+| KF570332.1  | BSEA     |
+| KF570331.1  | BSEA     |
+| KF570330.1  | BSEA     |
+| KF570329.1  | BSEA     |
+| KF570328.1  | BSEA     |
+| KF570327.1  | BSEA     |
+| KF570326.1  | BSEA     |
+| KF570325.1  | BSEA     |
+| KF570324.1  | EMED     |
+| KF570323.1  | EMED     |
+| KF570322.1  | EMED     |
+| KF570321.1  | EMED     |
+| KF570320.1  | EMED     |
+| KF570319.1  | EMED     |
+| KF570318.1  | EMED     |
+| KF570317.1  | EMED     |
+| KF570316.1  | EMED     |
+| KF570315.1  | EMED     |
+
+#+NAME: location-color
+| Location | Color       |
+|----------+-------------|
+| Unknown  | black       |
+| BSEA     | skyblue     |
+| EMED     | blueviolet  |
+| ENAC     | brown4      |
+| ENAP     | burlywood4  |
+| GC       | #FFB30F     |
+| SCO      | chartreuse4 |
+| WNAC     | #437F97     |
+| WNAP     | #01295F     |
+
+#+begin_src sh :tangle loc.sh :var colors=location-color :var accs=location-accession
+
+for acc in "${!accs[@]}"; do
+    printf "%s\t%s\n" $acc ${accs[$acc]}
+done
+#+end_src
+
+#+begin_src sh :tangle color.sh :var colors=location-color :var accs=location-accession
+
+for acc in "${!accs[@]}"; do
+    printf "%s\t%s\n" $acc ${colors["${accs[$acc]}"]}
+done
+#+end_src
+
+#+RESULTS:
+
+
+* Marine Dolphin Mitochondrial References
+
+  All complete marine dolphin mitochondrial genomes from RefSeq were downloaded
+  to [[./marine_dolphin.refseq.fasta]].
+
+  #+name: marine-dolphin-mito
+  #+caption: Accessions and species of the complete marine dolphin (/Delphinidae/) mitochondria publicly available from RefSeq
+  | Accession   | Species                    |
+  |-------------+----------------------------|
+  | NC_050265.1 | Lagenorhynchus acutus      |
+  | NC_045404.1 | Sousa teuszii              |
+  | NC_042761.1 | Steno bredanensis          |
+  | NC_037848.1 | Lagenodelphis hosei        |
+  | NC_036415.1 | Delphinus delphis          |
+  | NC_035426.1 | Lagenorhynchus obliquidens |
+  | NC_032301.1 | Stenella longirostris      |
+  | NC_019578.2 | Globicephala macrorhynchus |
+  | NC_023889.1 | Orcinus orca               |
+  | NC_022805.1 | Tursiops australis         |
+  | NC_020696.1 | Cephalorhynchus heavisidii |
+  | NC_019591.1 | Orcaella heinsohni         |
+  | NC_019590.1 | Orcaella brevirostris      |
+  | NC_019589.1 | Peponocephala electra      |
+  | NC_019588.1 | Feresa attenuata           |
+  | NC_019577.1 | Pseudorca crassidens       |
+  | NC_019441.1 | Globicephala melas         |
+  | NC_005278.1 | Lagenorhynchus albirostris |
+  | NC_012062.1 | Grampus griseus            |
+  | NC_012059.1 | Tursiops truncatus         |
+  | NC_012051.1 | Stenella attenuata         |
+  | NC_012061.1 | Delphinus capensis         |
+  | NC_012058.1 | Tursiops aduncus           |
+  | NC_012057.1 | Sousa chinensis            |
+  | NC_012053.1 | Stenella coeruleoalba      |
+
+#+begin_src bash :var accessions=marine-dolphin-mito[,0] :results ignore
+PATH=~/.local/edirect/:$PATH
+IFS=,
+
+efetch -db nuccore -id "${accessions[*]}" -format fasta \
+    > marine_dolphin.refseq.fasta
+#+end_src
+
+#+RESULTS:
+
+  - Create database from marine dolphins
+    #+begin_src sh :results output
+ml singularity/3.5.2 blast
+
+makeblastdb -dbtype nucl -in $DIR/marine_dolphin.refseq.fasta
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+  Building a new DB, current time: 12/16/2021 20:38:08
+  New DB name:   /work/maa146/dolphin/0-ref/marine_dolphin.refseq.fasta
+  New DB title:  /work/maa146/dolphin//0-ref/marine_dolphin.refseq.fasta
+  Sequence type: Nucleotide
+  Deleted existing Nucleotide BLAST database named /work/maa146/dolphin/0-ref/marine_dolphin.refseq.fasta
+  Keep MBits: T
+  Maximum file size: 1000000000B
+  Adding sequences from FASTA; added 25 sequences in 0.0162878 seconds.
+    #+end_example
+
+
+
+* Bottlenose Dolphin Mitochondrial Reference
+  Accession NC_012059.1 ([[https://www.ncbi.nlm.nih.gov/nuccore/NC_012059.1?report=fasta&log$=seqview&format=text][NCBI]]) downloaded to [[./bottlenose.mito.fa]]
+
+  - Split mito into amplicon sequences
+
+    #+begin_src sh :tangle split.sh
+ml singularity/3.5.2 samtools minimap2
+
+declare -A primers
+
+primers['P4']="NC_012059.1:2481-9486"
+primers['P6']="NC_012059.1:9460-15825"
+primers['P7']="NC_012059.1:15418- NC_012059.1:1-5137"
+primers['P10']="NC_012059.1:6906-13015"
+
+for primer in "${!primers[@]}"; do
+    samtools faidx $DIR/bottlenose.mito.fa ${primers[$primer]} |
+        sed '/>/d' |
+        tr -d '\n' |
+        cat <(printf '\n>%s\n' $primer) - |
+        fold
+done > $DIR/mito.amplicon.fa
+
+minimap2 -d $DIR/mito.amplicon.{mmi,fa}
+samtools faidx $DIR/mito.amplicon.fa
+
+    #+end_src

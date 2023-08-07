@@ -1,0 +1,24 @@
+# Scripts in readme
+1-fltr-set/convert.sh
+1-fltr-set/run-lea.R
+2-gomx/convert.sh
+2-gomx/lea.R
+
+# Easily recreated
+1-fltr.K6r10.membership
+2-gomx.K5r7.membership
+1-fltr-set/samples.geno
+1-fltr-set/samples.log
+1-fltr-set/samples.map
+1-fltr-set/samples.ped
+1-fltr-set/samples.names
+1-fltr-set/samples.snmf/
+1-fltr-set/samples.snmfProject
+2-gomx/samples.geno
+2-gomx/samples.log
+2-gomx/samples.map
+2-gomx/samples.ped
+2-gomx/samples.names
+2-gomx/samples.snmf/
+2-gomx/samples.snmfProject
+chr-map.amplicons

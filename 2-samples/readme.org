@@ -1,0 +1,136 @@
+#+TITLE: Gulf of Mexico Samples
+#+PROPERTY:  header-args :var DIR=(my/dir)
+
+Sample table is in [[./data.ser.org]] to condense document.
+
+1) Download data
+  #+begin_src sh :tangle 0-download/run.sh :var data=data.ser.org:data
+NCBI=https://www.be-md.ncbi.nlm.nih.gov
+for name in "${!data[@]}"; do
+    SRA=${data[$name]}
+    wget -O - "$NCBI/Traces/sra-reads-be/fastq?acc=$SRA" |
+        zcat -f > $DIR/0-download/$name.fq
+done
+  #+end_src
+
+2) Align raw data to amplicon sequences using minimap2
+  #+begin_src sh :tangle 1-align/run.sh :var data=data.ser.org:data[,0]
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity minimap2/2.17 samtools/v1.9-4-deb_cv1
+
+samtools () {
+    singularity exec -B $ROOT \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif \
+        samtools "$@" ; }
+
+map () {
+    name=$1
+
+    minimap2 -ax map-ont -t4 \
+            $ROOT/0-ref/mito.amplicon.mmi \
+            $DIR/0-download/$name.fq |
+        samtools view -bS - |
+        samtools sort -o $DIR/1-align/$name.bam -
+    samtools index $DIR/1-align/$name.bam
+}
+
+export ROOT DIR
+export -f samtools map
+
+parallel --eta -j12 map {} ::: "${data[@]}"
+
+
+  #+end_src
+3) Get base coverage for primary alignments
+  #+begin_src sh :tangle 2-coverage/run.sh :var data=data.ser.org:data[,0]
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+samtools () {
+    singularity exec -B $ROOT \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif \
+        samtools "$@" ; }
+
+depth () {
+    name=$1
+    samtools view -b -F 260 $DIR/1-align/$name.bam |
+        samtools depth -a -
+}
+
+export ROOT DIR
+export -f samtools depth
+
+parallel --tag --eta -j12 depth {} ::: "${data[@]}" > $DIR/2-coverage.txt
+  #+end_src
+4) Get table of coverage per sample
+     #+header: :var full=data.ser.org:complete :var part=data.ser.org:partial
+     #+HEADER: :results output file  :file 2-coverage.tbl
+     #+begin_src R
+library(tidyverse)
+
+input <- list(Complete=full, Partial=part) %>%
+  bind_rows(.id='Type') %>%
+  select(Type, Accession=V1) %>%
+  filter(!grepl("^\\s*$", Accession))
+
+
+data <- read.delim("2-coverage.txt", header=F,
+               col.names =c("Accession", "contig",    "pos",     "coverage"),
+               colClasses=c("character", "character", "integer", "integer")) %>%
+  group_by(Accession, contig) %>%
+  summarize(avgcov = median(coverage))%>%
+  mutate(contig=fct_shift(factor(contig))) %>%
+  spread(contig, avgcov, fill=0) %>%
+  left_join(input)
+
+as.data.frame(data)
+ #+end_src
+
+  #+RESULTS:
+  [[file:2-coverage.tbl]]
+
+  [[./2-coverage.tbl]]
+5) Plot median coverage
+     #+header: :results output file graphics :file amp-coverage.png
+     #+header: :width 8 :height 3.5 :units in :res 600
+     #+begin_src R
+library(tidyverse)
+library(ggrepel)
+
+data <- read.table("2-coverage.tbl") %>%
+  gather(key="contig", value="avgcov", P4, P6, P7, P10) %>%
+  mutate(contig = fct_shift(factor(contig)))
+
+pos = position_jitter(width = 0.3, seed = 2)
+
+ggplot(data, aes(contig, avgcov )) +
+geom_boxplot(outlier.alpha = 0) +
+geom_jitter(color="grey50", shape=20, position=pos, size=0.5) +
+scale_y_log10() +
+theme_minimal() +
+xlab("Amplicon") +
+ylab("Median coverage") +
+facet_grid(rows=vars(Type), scales='free_y') +
+theme(plot.background = element_rect(fill = "white"))
+
+   #+end_src
+
+   #+RESULTS:
+   [[file:amp-coverage.png]]
+
+   #+ATTR_ORG: :width 1000
+   [[file:amp-coverage.png]]
+6) Get table of avg coverage
+     #+HEADER: :results output
+     #+begin_src R
+library(tidyverse)
+read.table("2-coverage.tbl") %>%
+  group_by(Type) %>%
+  summarize_at(vars(P4,P6,P7,P10), mean) %>%
+  as.data.frame()
+     #+end_src
+
+     #+RESULTS:
+     :       Type       P4       P6       P7      P10
+     : 1 Complete 242.5777 315.1386 556.4922 413.4870
+     : 2  Partial 145.5758 395.4091 384.1515 385.8939

@@ -1,0 +1,867 @@
+#+TITLE: Mito Control Region
+#+PROPERTY:  header-args :var DIR=(my/dir)
+
+* Vollmer mtCR sequences
+- Sources
+  - Vollmer and Rosel 2017
+    [[./vollmer_2017.online_resource_7.tsv]]
+    [[./vollmer_2017.online_resource_16.tsv]]
+
+    #+NAME: vollmer2017-color    
+      | Population | Color   |
+      |------------+---------|
+      | NW inner   | #98d4ed |
+      | NW outer   | #bebfbf |
+      | NW oceanic | #e0e47e |
+      | E inner    | #f5c89b |
+      | E outer    | #e67383 |
+      | E oceanic  | #c7a3c7 |
+      | NE oceanic | #99c796 |
+
+  - Vollmer et al 2021
+    [[./vollmer_2021.SI-table-3.tsv]]
+    [[./vollmer_2021.SI-table-4.tsv]]
+
+      #+NAME: vollmer2021-color    
+      | Population               | Color   |
+      |--------------------------+---------|
+      | Entire green pop (n=541) | #669e40 |
+      | Entire blue pop (n=42)   | #2f5597 |
+
+
+
+1) Download sequences from NCBI to [[./vollmer.samples.fa]]
+   #+begin_src sh
+ROOT=$(git rev-parse --show-toplevel)
+cat <(grep -v '^#' vollmer_2017.online_resource_7.tsv | cut -f 4 ) \
+    <(grep -v '^#' vollmer_2021.SI-table-4.tsv | cut -f 7) |
+    sort -u |
+    ~/.local/edirect/efetch -db nuccore -format fasta > $DIR/vollmer.samples.fa
+   #+end_src
+
+   #+RESULTS:
+
+2) Assign pop and accession number to haplotype if number of dolphins with
+   genotype is > 50% in population
+
+   #+begin_src sh
+awk 'NR == 1 {
+        for(i = 2; i <= NF; i++)
+        header[i]=$i;
+     }
+     NR > 1 {
+        max = 2;
+        sum = $2;
+        for(i = 3; i <= NF; i++){
+            if($i > $max) max =i;
+            sum+=$i
+        }
+
+        if($max/sum > 0.5)
+                    print $1, header[max];
+    }' FS="\t" OFS="\t" vollmer_2017.online_resource_16.tsv |
+    sort -k 1,1 |
+    join -j 1 -t$'\t' \
+        <(grep -v '^#' vollmer_2017.online_resource_7.tsv |
+              cut -f 3,4 |
+              sort -k 1,1) \
+                  - |
+    cut -f 2,3 |
+    sort -u |
+    awk 'BEGIN{print "Accession\tPopulation"} $1=$1 ".1"' FS="\t" OFS="\t"> vollmer_2017.groups
+   #+end_src
+
+   #+RESULTS:
+
+   #+begin_src sh
+grep -v '^#' vollmer_2021.SI-table-3.tsv |
+    awk 'NR == 1 {
+        for(i = 2; i <= NF; i++)
+        header[i]=$i;
+     }
+     NR > 1 {
+        max = 2;
+        sum = $2;
+        for(i = 3; i <= 3; i++){
+            if($i > $max) max =i;
+            sum+=$i
+        }
+
+        if(sum > 0 && $max/sum > 0.5)
+                    print $1, header[max];
+    }' FS="\t" OFS="\t"  |
+    sort -k 1,1 |
+     join -j 1 -t$'\t' \
+         <(grep -v '^#' vollmer_2021.SI-table-4.tsv |
+               cut -f 6,7 |
+               sort -k 1,1) \
+                   - |
+     cut -f 2,3 |
+     sort -u |
+     awk 'BEGIN{print "Accession\tPopulation"} $1=$1 ".1"' FS="\t" OFS="\t"> vollmer_2021.groups
+   #+end_src
+
+   #+RESULTS:
+
+3) Find mtCR region for reference mito
+
+   Blast NOAA samples (mtCR region) to reference bottlenose mito. Keep region
+   that all (n=106) samples cover. Saving to [[./mtCR.region.fa]]
+
+   #+NAME mtcr-coverage
+   #+begin_src sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity/3.5.2 blast/2.9.0 bedtools/2.28.0 samtools/v1.9-4-deb_cv1
+
+blastn -subject $ROOT/0-ref/bottlenose.mito.fa \
+    -query $DIR/vollmer.samples.fa \
+    -outfmt 6 |
+    awk '{print $2,$9-1,$10}' OFS="\t" |
+    sort -k2,2n |
+    bedtools genomecov -bg -i - -g $ROOT/0-ref/bottlenose.mito.fa.fai |
+    awk 'BEGIN { OFS="\t"; print "Accession", "Start", "End", "Coverage";}
+               $4 == 106'
+   #+end_src
+
+   #+RESULTS:
+   | Accession   | Start |   End | Coverage |
+   | NC_012059.1 | 15472 | 15822 |      106 |
+
+   #+NAME: mtcr-region
+   | NC_012059.1 | 15472 | 15822 |
+
+   #+HEADER: :var mtcr=mtcr-region[0,]
+   #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+samtools () {
+    singularity exec -B $ROOT \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif samtools "$@"
+}
+
+
+samtools faidx $ROOT/0-ref/bottlenose.mito.fa $(printf "%s:%d-%d" ${mtcr[@]}) |
+    sed '/>/s/>.*/>mtCR mito control region/' > $DIR/mtCR.region.fa
+   #+end_src
+
+   #+RESULTS:
+
+
+* Align
+
+1) Reduce consensus sequences to mtCR region
+
+  #+HEADER: :var mtcr=mtcr-region[0,]
+  #+begin_src sh :tangle 1-align/1-reduce.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity/3.8.3
+
+blastn () {
+    singularity exec -B$ROOT /apps/singularity-3/blast/blast-2.9.0.sif blastn $@
+}
+
+samtools () {
+    singularity exec -B $ROOT \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif samtools "$@"
+}
+
+fasta=$ROOT/3-snps/consensus.masked.fa
+
+samtools faidx $ROOT/0-ref/bottlenose.mito.fa $(printf "%s:%d-%d" ${mtcr[@]}) |
+    sed '/>/s/>.*/>mtCR mito control region/' > $DIR/mtCR.region.fa
+
+samtools faidx $fasta
+blastn -query $fasta -subject $DIR/mtCR.region.fa -outfmt 6 |
+    tee $DIR/1-align/1-blast.out |
+    awk '$4 > 332 {printf "%s:%d-%d\n", $1, $7, $8 }' |
+    tee $DIR/1-align/1-blast.bed |
+    samtools faidx -n 1000 -r - $fasta |
+    sed -e '/>/s/:.*//' -e 's/N*$//'  \
+        > $DIR/1-align/1-reduce.fa
+  #+end_src
+
+  #+results:
+
+   - Samples w/o alignment
+     #+begin_src bash :dir (format "%s" ssh-deploy-root-remote) :results output
+ROOT=$(git rev-parse --show-toplevel)
+comm -13 <(cut -f 1 $DIR/1-align/1-blast.out | sort) \
+    <(cut -f 1 $ROOT/3-snps/consensus.masked.fa.fai | sort ) |
+    awk '$0=$0' ORS=', '
+     #+end_src
+
+     #+RESULTS:
+     : SER11-0040, SER11-2252, SER11-2425, SER12-0271, SER13-0635,
+   - Samples w/ short alignment
+     #+begin_src bash :dir (format "%s" ssh-deploy-root-remote) :results output
+comm -3 <(cut -f 1 $DIR/1-align/1-blast.out | sort) \
+    <(sed -e 's/:.*//' $DIR/1-align/1-blast.bed | sort ) |
+    awk '$0=$0' ORS=', '
+     #+end_src
+
+     #+RESULTS:
+     : SER12-0284, SER13-0409, SER13-0641, SER19-00019, SER19-00132, SER21-01282,
+2) Merge samples with identical mtCR
+
+    #+begin_src sh :tangle 1-align/2-merge.sh
+ awk 'NR > 1 { _[$2] = $1 " " _[$2] }
+      END { for( i in _) printf ">%s\n%s\n", _[i], i;}' \
+          RS=">" FS="\n" \
+          $DIR/1-align/1-reduce.fa > $DIR/1-align/2-merge.fa
+
+    #+end_src
+
+   - Sample count
+    #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+grep '>' -c $DIR/1-align/1-reduce.fa
+    #+end_src
+
+    #+RESULTS:
+    : 402
+
+   - Distinct mtCR haplotypes
+     #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+grep '>' -c $DIR/1-align/2-merge.fa
+     #+end_src
+
+     #+RESULTS:
+     : 36
+     - Singleton haplotypes
+       #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+ grep '>' $DIR/1-align/2-merge.fa |
+     awk 'NF == 1 {c++} END {print c}'
+       #+end_src
+
+       #+RESULTS:
+       : 20
+3) Combine
+   #+begin_src sh :tangle 1-align/3-combine.sh
+cat $DIR/vollmer.samples.fa \
+    $DIR/1-align/2-merge.fa \
+    > $DIR/1-align/3-combine.fa
+   #+end_src
+
+   - Sample count
+    #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+grep '>' -c $DIR/1-align/3-combine.fa
+    #+end_src
+
+    #+RESULTS:
+4) Align with mafft
+   #+begin_src sh :tangle 1-align/4-mafft.sh
+ml singularity/3.8.3
+mafft () {
+    singularity exec -B $DIR \
+        /apps/singularity-3/mafft/mafft-7.471--h516909a_0.sif \
+        mafft $@
+}
+
+mafft --auto --thread 48  $DIR/1-align/3-combine.fa > $DIR/1-align/4-mafft.fasta
+   #+end_src
+5) Trim alignments to overlapping region
+
+   Get highly conserved region by removing flanking gaps. =awk= converts fasta
+   alignment to single line, tab-delimited format; then finds the start and end
+   of flanking gaps for each alignment, outputting [[./1-align/5-trim.bed]] in bed
+   format.
+   #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+awk 'NR > 1 { sub(" .*", "", $1); $1=$1 "\t"; print}' \
+    RS=">" FS="\n" OFS="" $DIR/1-align/4-mafft.fasta |
+    awk '{match($2, "^-*"); left=RLENGTH;
+          match($2, "-*$"); right=length($2) - RLENGTH;
+          print $1,left,right;}' OFS="\t" > $DIR/1-align/5-trim.bed
+
+   #+end_src
+
+   #+RESULTS:
+
+   =bedtools= calculates coverage and merges the regions were more than 90% (128
+   of 142) of the samples overlap.
+   #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+ml singularity bedtools
+
+awk '$1 = "contig"' OFS="\t" $DIR/1-align/5-trim.bed |
+    sort -k2,2n |
+    bedtools genomecov -bg -g <(printf "contig\t1000")  -i - |
+    awk '$4 >= 128' |
+    bedtools merge -i -
+
+   #+end_src
+
+   #+RESULTS:
+   | contig | 66 | 418 |
+
+   =awk= calculates the sequence coordinates from bed file. =samtools= cuts
+   sequences to highly conserved region.
+   #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+ml singularity/3.8.3
+samtools ()
+{
+    singularity exec -B $DIR \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif samtools $@
+}
+
+
+awk '{start = 66 - $2;
+      if(start < 0) start = 0;
+      printf "%s:%d-%d\n", $1, start, 418 - $2 }' OFS="\t" \
+    $DIR/1-align/5-trim.bed |
+    samtools faidx -r - $DIR/1-align/3-combine.fa |
+    sed '/>/s/:.*//'> $DIR/1-align/5-trim.fa
+   #+end_src
+
+   #+RESULTS:
+6) Align trimmed sequences
+
+   #+begin_src shell :tangle 1-align/6-mafft.sh
+ml singularity/3.8.3
+mafft () {
+    singularity exec -B $DIR \
+        /apps/singularity-3/mafft/mafft-7.471--h516909a_0.sif \
+        mafft $@
+}
+
+mafft --auto --thread 48  $DIR/1-align/5-trim.fa > $DIR/1-align/6-mafft.fasta
+   #+end_src
+7) Split in sample-sets
+   #+begin_src sh :tangle 1-align/7-samples.split.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity/3.8.3
+samtools ()
+{
+    singularity exec -B $DIR \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif samtools $@
+}
+
+
+samtools faidx $DIR/1-align/5-trim.fa
+
+cut -f 1 $DIR/vollmer_2021.groups |
+    grep -f - -v -w $DIR/1-align/5-trim.fa.fai |
+    cut -f 1 |
+    samtools faidx -r - $DIR/1-align/5-trim.fa > $DIR/1-align/7-split.2017.fa
+
+cut -f 1 $DIR/vollmer_2017.groups |
+    grep -f - -v -w $DIR/1-align/5-trim.fa.fai |
+    cut -f 1 |
+    samtools faidx -r - $DIR/1-align/5-trim.fa > $DIR/1-align/7-split.2021.fa
+
+   #+end_src
+8) Align split sample-sets using mafft
+   #+begin_src sh :tangle 1-align/8-mafft.sh
+ml singularity/3.8.3
+mafft () {
+    singularity exec -B $DIR \
+        /apps/singularity-3/mafft/mafft-7.471--h516909a_0.sif \
+        mafft $@
+}
+
+mafft --auto --thread 48  $DIR/1-align/7-split.2017.fa > $DIR/1-align/8-mafft.2017.fasta
+mafft --auto --thread 48  $DIR/1-align/7-split.2021.fa > $DIR/1-align/8-mafft.2021.fasta
+   #+end_src
+
+* =raxml=
+1) Vollmer and Rosel (2017)
+   #+begin_src sh :tangle 2-raxml/2017/1-run.sh
+   ROOT=$(git rev-parse --show-toplevel)
+   cd $DIR/2-raxml/2017
+
+   $ROOT/apps/standard-RAxML-8.2.12/raxmlHPC-PTHREADS-AVX2 \
+         -m GTRGAMMA \
+         -p 25632 \
+         -s $DIR/1-align/8-mafft.2017.fasta \
+         -n vollmer2017 \
+         -N autoMRE \
+         -x 451842 \
+         -f a \
+         -k \
+         -T 48 |& tee run.log
+     #+end_src
+2) Vollmer et al. (2021)
+   #+begin_src sh :tangle 2-raxml/2021/1-run.sh
+   ROOT=$(git rev-parse --show-toplevel)
+   cd $DIR/2-raxml/2021
+
+   $ROOT/apps/standard-RAxML-8.2.12/raxmlHPC-PTHREADS-AVX2 \
+         -m GTRGAMMA \
+         -p 25632 \
+         -s $DIR/1-align/8-mafft.2021.fasta \
+         -n vollmer2021 \
+         -N autoMRE \
+         -x 451842 \
+         -f a \
+         -k \
+         -T 48 |& tee run.log
+     #+end_src
+* Full PCA using =adegenet=
+- SNP plot
+  #+HEADER: :results output graphics file  :width 800 :height 400
+  #+begin_src R :file snp-plot.png :session pca.full
+library(adegenet)
+
+snps <- fasta2genlight("1-align/6-mafft.fasta", snpOnly=T)
+glPlot(snps)
+  #+end_src
+
+  #+RESULTS:
+  [[file:snp-plot.png]]
+- Eigenvalue histo
+  #+HEADER: :results output graphics file  :width 800 :height 350
+  #+begin_src R :file eigen-plot.png :session pca.full
+pca <- glPca(snps, nf=10)
+
+pca.perc = 100*pca$eig/sum(pca$eig)
+barplot(pca.perc, main="Eigenvalues", col=heat.colors(length(pca$eig)))
+  #+end_src
+
+  #+RESULTS:
+  [[file:eigen-plot.png]]
+
+- Plot
+  #+HEADER: :results output graphics file  :width 800 :height 350
+  #+begin_src R :file eigen-plot.png :session pca.full
+library(tidyverse)
+meta <- list(
+   "2017" = "vollmer_2017.groups",
+   "2021" = "vollmer_2021.groups"
+ ) %>% lapply(read.delim,
+              header = F,
+              col.names = c("ID", "Group")) %>%
+  bind_rows()
+
+  pca.dataset <- as.data.frame(pca$scores) %>%
+    rownames_to_column("ID") %>%
+    left_join(meta, multiple = 'all') %>%
+    mutate(Group = ifelse(grepl("^SER", ID), "Stranded", Group),
+           shape = ifelse(grepl("^SER", ID), "New", "Published"))
+
+ ggplot(pca.dataset, aes(PC1, PC2, color=Group, shape=shape)) +
+    geom_point(size=3, alpha=0.7) +
+    theme_minimal() +
+    xlab(sprintf("PC1 (%0.1f%%)", pca.perc[1])) +
+    ylab(sprintf("PC2 (%0.1f%%)", pca.perc[2])) +
+    theme(legend.position = 'bottom', legend.title = element_blank())
+
+  #+end_src
+
+  #+RESULTS:
+  [[file:eigen-plot.png]]
+
+* Figure
+** PCA-Phylo (figure 1)
+load metadata
+#+begin_src R :session pca.phylo
+library(tidyverse)
+meta <- list(
+  "2017" = "vollmer_2017.groups",
+  "2021" = "vollmer_2021.groups"
+) %>% lapply(read.delim,
+             header = T,
+             col.names = c("ID", "Group"))
+#+end_src
+
+#+RESULTS:
+
+*** 2017
+#+begin_src R :session pca.phylo
+colors.2017 <- c("NW inner"="#98d4ed",
+           "NW outer" =  "#bebfbf",
+           "NW oceanic"= "#e0e47e",
+           "E inner"  =  "#f5c89b",
+           "E outer"  =  "#e67383",
+           "E oceanic" = "#c7a3c7",
+           "NE oceanic"= "#99c796",
+           "Stranded"  = "#888888")
+#+end_src
+
+**** PCA
+#+header: :results output graphics file :file mtcr-pca.2017.png
+#+header: :width 8 :height 8 :units in :res 100 :bg white
+#+begin_src R :session pca.phylo
+library(adegenet)
+
+snps.2017 <- fasta2genlight("1-align/8-mafft.2017.fasta", snpOnly=T )
+pca.2017 <- glPca(snps.2017, nf=10)
+pca.2017$perc = 100*pca.2017$eig/sum(pca.2017$eig)
+
+
+pca.2017.plot <- as.data.frame(pca.2017$scores) %>%
+    rownames_to_column("ID") %>%
+    left_join(meta[['2017']]) %>%
+    mutate(Group = ifelse(grepl("^SER", ID), "Stranded", Group),
+           shape = ifelse(grepl("^SER", ID), "Stranded", "Published")) %>%
+    ggplot(aes(PC1, PC2, color=Group, shape=shape)) +
+    geom_point(size=3, alpha=0.7) +
+    theme_minimal() +
+    scale_color_manual(values=colors.2017, breaks=names(colors.2017)[-8]) +
+    scale_shape_discrete(breaks=c("Stranded")) +
+    ggtitle("Vollmer and Rosel 2017") +
+    guides() +
+    xlab(sprintf("PC1 (%0.1f%%)", pca.2017$perc[1])) +
+    ylab(sprintf("PC2 (%0.1f%%)", pca.2017$perc[2])) +
+    theme(legend.position = 'bottom', legend.title = element_blank())
+pca.2017.plot
+  #+end_src
+
+  #+RESULTS:
+  [[file:mtcr-pca.2017.png]]
+
+
+**** Tree
+#+HEADER: :results output graphics file  :width 8 :height 8 :units in :res 100
+#+begin_src R :file mtcr-tree.2017.png :bg white :session pca.phylo
+library(ape)
+library(tidytree)
+library(ggtree)
+
+tree <- read.tree("2-raxml/2017/RAxML_bestTree.vollmer2017")
+anno.2017 <- data.frame(ID=tree$tip.label) %>%
+  left_join(meta[['2017']]) %>%
+    mutate(Group = ifelse(grepl("^SER", ID), "Stranded", Group),
+           shape = ifelse(grepl("^SER", ID), "Stranded", "Published")) %>%
+  rename(label=ID)
+
+
+layout.2017 <- ggtree(tree, layout="daylight", branch.length = 'none') %<+% anno.2017
+
+tree.2017 <- layout.2017 + geom_tippoint(aes(color = Group, shape=shape), size=2) +
+  scale_color_manual(values=colors.2017, breaks=names(colors.2017)[-8]) +
+  scale_shape_discrete(breaks=c("Stranded")) +
+  theme(legend.position = 'bottom', legend.title = element_blank()) +
+  ggtitle("Vollmer and Rosel 2017")
+tree.2017
+      #+end_src
+
+      #+RESULTS:
+      [[file:mtcr-tree.2017.png]]
+
+*** 2021
+#+begin_src R :session pca.phylo
+colors.2021 <- c("Entire green pop (n=541) " =  "#669e40",
+                 "Entire blue pop (n=42)"  =  "#2f5597",
+                 "Stranded"  = "#888888")
+#+end_src
+
+
+**** PCA
+#+header: :results output graphics file :file mtcr-pca.2021.png
+#+header: :width 8 :height 8 :units in :res 100 :bg white
+#+begin_src R :session pca.phylo
+library(adegenet)
+
+snps.2021 <- fasta2genlight("1-align/8-mafft.2021.fasta", snpOnly=T )
+pca.2021 <- glPca(snps.2021, nf=10)
+pca.2021$perc = 100*pca.2021$eig/sum(pca.2021$eig)
+
+
+pca.2021.plot <- as.data.frame(pca.2021$scores) %>%
+    rownames_to_column("ID") %>%
+    left_join(meta[['2021']]) %>%
+    mutate(Group = ifelse(grepl("^SER", ID), "Stranded", Group),
+           shape = ifelse(grepl("^SER", ID), "Stranded", "Published")) %>%
+    ggplot(aes(PC1, PC2, color=Group, shape=shape)) +
+    geom_point(size=3, alpha=0.7) +
+    theme_minimal() +
+    scale_color_manual(values=colors.2021, breaks=names(colors.2021)[-3]) +
+    scale_shape_discrete(breaks=c("Stranded")) +
+    ggtitle("Vollmer et al. (2021)") +
+    guides() +
+    xlab(sprintf("PC1 (%0.1f%%)", pca.2017$perc[1])) +
+    ylab(sprintf("PC2 (%0.1f%%)", pca.2017$perc[2])) +
+    theme(legend.position = 'bottom', legend.title = element_blank())
+pca.2021.plot
+  #+end_src
+
+  #+RESULTS:
+  [[file:mtcr-pca.2021.png]]
+
+
+
+**** Tree
+#+header: :results output graphics file  :width 8 :height 8 :units in :res 100
+#+begin_src R :file mtcr-tree.2021.png :bg white :session pca.phylo
+library(ape)
+library(tidytree)
+library(ggtree)
+
+tree <- read.tree("2-raxml/2021/RAxML_bestTree.vollmer2021")
+anno.2021 <- data.frame(ID=tree$tip.label) %>%
+  left_join(meta[['2021']]) %>%
+    mutate(Group = ifelse(grepl("^SER", ID), "Stranded", Group),
+           shape = ifelse(grepl("^SER", ID), "Stranded", "Published")) %>%
+  rename(label=ID)
+
+
+
+## library(plotly)
+## p1 <- ggtree(tree, branch.length = 'none')
+## metat <- p1$data %>% inner_join(anno.2021)
+## p2 <- p1 +
+##   geom_point(data = metat,
+##              aes(x = x,
+##                  y = y,
+##                  colour = Group,
+##                  label = label))
+## ggplotly(p2)
+
+layout.2021 <- ggtree(tree, layout="daylight", branch.length = 'none') %<+% anno.2021
+tree.2021 <- layout.2021 +
+  geom_highlight(node=85, s_shape=1, expand=0.01, color=NA, alpha=0.25) +
+  geom_tippoint(aes(color = Group, shape=shape), size=2) +
+  scale_color_manual(values=colors.2021, breaks=names(colors.2021)[-3]) +
+  scale_shape_discrete(breaks=c("Stranded")) +
+  theme(legend.position = 'bottom', legend.title = element_blank()) +
+  ggtitle("Vollmer et al. (2021)")
+tree.2021
+#+end_src
+
+#+RESULTS:
+[[file:mtcr-tree.2021.png]]
+
+*** Combine
+#+header: :results output graphics file :file mtcr-fig.png
+#+header: :width 10 :height 10 :units in :res 500 :bg white
+#+begin_src R :session pca.phylo
+library(cowplot)
+
+plot_grid(
+  pca.2017.plot + theme(legend.position = 'bottom',
+                        plot.title = element_text(size=20)),
+  tree.2017 + theme(legend.position = 'none',
+                    plot.title = element_blank()),
+  pca.2021.plot + theme(legend.position = 'bottom',
+                        plot.title = element_text(size=20)),
+  tree.2021 + theme(legend.position = 'none',
+                    plot.title = element_blank())
+)
+
+#+end_src
+
+#+RESULTS:
+[[file:mtcr-fig.png]]
+
+** COMMENT Diagram
+
+#+begin_src dot :file diagram.png
+strict digraph {
+
+node [
+    style=filled
+    shape=rect
+    pencolor="#00000044" // frames color
+    fontname="Helvetica,Arial,sans-serif"
+    shape=plaintext
+    ]
+
+v2017 [label=<<b>Vollmer and Rosel (2017)</b><br/>73 haplotypes>]
+
+v2021 [label=<<b>Vollmer et al. (2021)</b><br/>51 haplotypes>]
+
+mtcr [label=<<b>Previously sequenced mtCR</b><br/>106 haplotypes>]
+
+new [
+    label=<<b>Newly sequenced full length mtDNA</b><br/>410 samples>
+    color="#CC000066"
+]
+
+trim [
+     label="Trim full sequences to mtCR region"
+     shape=oval
+]
+
+newcr [
+    label=<<b>mtCR region of newly sequenced samples</b><br/>36 haplotypes>
+]
+
+new2017 [label=<<b>Vollmer and Rosel (2017) + newly sequenced haplotypes</b><br/>110 haplotypes>]
+
+new2021 [label=<<b>Vollmer et al. (2021) + newly sequenced haplotypes</b><br/>88 haplotypes>]
+
+
+v2017 -> mtcr
+v2021 -> mtcr
+
+new -> trim -> newcr
+mtcr -> trim
+
+newcr -> new2017
+v2017 -> new2017
+
+newcr -> new2021
+v2021 -> new2021
+
+}
+#+end_src
+
+#+RESULTS:
+[[file:diagram.png]]
+* COMMENT mtCR PCA using predicted populations
+
+- Load data
+  #+begin_src R :session pca
+library(tidyverse)
+library(adegenet)
+library(cowplot)
+snps <- fasta2genlight("1-align/6-mafft.fasta")
+pca <- glPca(snps, nf=10)
+  #+end_src
+
+  #+RESULTS:
+
+- Run PCA and plot eigenvalue variance
+  #+header: :results output graphics file  :width 800 :height 400
+  #+begin_src R :session pca :file eigen-plot.png
+pca <- glPca(snps, nf=50)
+pca.perc <- 100 * pca$eig/sum(pca$eig)
+
+plot.eig <- ggplot(data.frame(id=1:length(pca$eig), value=cumsum(pca.perc)),
+       aes(id, value)) +
+  geom_point() +
+  scale_y_continuous(labels = function(x) sprintf("%0.f%%", x)) +
+  xlab("Num. Principal Components") +
+  ylab("Total Contained Variance") +
+  theme_minimal()
+
+plot.eig
+  #+end_src
+
+  #+RESULTS:
+  [[file:eigen-plot.png]]
+
+
+- Run clustering and plot group size
+  #+header: :results output graphics file  :width 800 :height 400
+  #+begin_src R :session pca :file cluster-plot.png
+clusters <- find.clusters(snps, n.pca=5, n.clust=5)
+
+spillway = data.frame(
+      Year = factor(c(2010,   2011, 2012, 2013, 2014, 2015,   2016, 2017,   2018,   2019,  2020, 2021)),
+      Days = c(   0,     42,    0,    0,    0,    0,   22,      0,     22,    121,    29,    0),
+      Bays = c(   0, 306.33,    0,    0,    0,    0, 133.73,    0, 116.41, 154.84, 57.07,    0),
+      BayDay = c(   0, 12866,    0,    0,    0,    0, 2942,    0, 2561, 18736, 1655,    0),
+      Released = c( 0, 794031880320,    0,    0,    0,    0, 181567059840,    0, 158053446720, 1156301982720, 102139185600,    0),
+  Spillway = factor(c(0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0), labels=c('Closed', 'Open')),
+  Event  = factor(c(2, 1, NA, NA, NA, NA, 1, NA, 1, 1, 1, NA), labels=c('Spillway Open', 'Deepwater Horizon'))
+    )
+
+
+total.strandings = data.frame(
+  Year = factor(c(2010,   2011, 2012, 2013, 2014, 2015,   2016, 2017,   2018,   2019,  2020, 2021)),
+  Strandings = c(97, 147, 51, 50, 47, 35, 84, 53, 56, 151, 68, 78)
+)
+
+data <- read.table("../6-structure/2-gomx.K5r7.membership", header=T) %>%
+  mutate(Year = as.integer(sub('SER(..).*', '\\1', sample))) %>%
+  group_by(population, Year) %>%
+  count(name='Strandings') %>%
+  mutate(Year = factor(paste0(20, Year)), Population = factor(population)) %>%
+  select(-population) %>%
+  merge(spillway) %>%
+  mutate(BayDay=Days*Bays)
+
+norm.factor = left_join(total.strandings,
+                        aggregate(Strandings ~ Year, data, sum),
+                        by='Year') %>%
+  mutate(factor = Strandings.x/Strandings.y) %>%
+  select(Year, factor)
+
+data <- left_join(data, norm.factor, by="Year") %>%
+  mutate(Norm.Strandings = Strandings*factor)
+
+#datant(position = position_stack(), size=2.5) +
+##   scale_y_continuous() +
+##   scale_x_discrete(limits=rev) +
+##   coord_flip() +
+##   scale_color_brewer(palette = "Set3") +
+##   guides(color='none')+
+##   xlab("Group") +
+##   ylab("Size") +
+##   theme_minimal() +
+##   theme(legend.position = 'bottom',
+##         legend.title = element_blank(),
+##         panel.grid.major.y = element_blank(),
+##         panel.grid.minor.x = element_blank())
+
+plot_grid(pca.plot, grp.plot, ncol=2, rel_widths = c(1,0.5))
+  #+end_src
+
+  #+RESULTS:
+  [[file:cluster-plot.png]]
+
+  #+RESULTS: pca-plot
+  [[file:pca.png]]
+- Map
+  #+HEADER: :results output graphics file  :width 900 :height 450 :bg white
+  #+begin_src R :file map.png :session pca
+library(maps)
+library(hues)
+
+vollmer2021 <- read.delim("vollmer_2021.SI-table-4.tsv",
+                          comment.char = '#',
+                          sep="\t",
+                          skip = 9,
+                          header=F,
+                          colClasses = c("NULL", "NULL", "numeric", "numeric",
+                                         "NULL", "NULL", "character", rep("NULL", 37)))
+colnames(vollmer2021) = c("Latitude", "Longitude", "Accession")
+vollmer2021$Accession <- paste0(vollmer2021$Accession, ".1")
+vollmer2021$Dataset <- "Published"
+
+vollmer2017 <- read.delim("vollmer_2017.accessions.tsv",header=F)
+colnames(vollmer2017) <- vollmer2017[1,]
+vollmer2017 <- vollmer2017[-1, c("Latitude", "Longitude", "GenBank Accession#")]
+colnames(vollmer2017) = c("Latitude", "Longitude", "Accession")
+vollmer2017$Accession <- paste0(vollmer2017$Accession, ".1")
+vollmer2017$Dataset <- "Published"
+
+new <- merge(read.delim("../2-samples/samples.csv"),
+             read.table("1-align/2-merge.hap-pair",
+                        col.names = c("sample_name", "Accession")))
+new <- tidyr::separate(new, lat_lon, into=c('Latitude', 'Longitude', NA), sep="[NW]")
+new <- new[,c("Latitude", "Longitude", "Accession")]
+new$Longitude = as.numeric(new$Longitude)*-1
+new$Dataset <- "New"
+
+data <- unique(rbind(vollmer2017, vollmer2021, new))
+data$Latitude  <- as.numeric(data$Latitude)
+data$Longitude <- as.numeric(data$Longitude)
+data$Group <- clusters$grp[data$Accession]
+
+bound.lat <- c(min(data$Latitude, na.rm=T), max(data$Latitude, na.rm=T))
+bound.lon <- c(min(data$Longitude, na.rm=T), max(data$Longitude, na.rm=T))
+usa <- map_data("state", region=c("mississippi",
+                                   "alabama",
+                                   "louisiana",
+                                   "florida"))
+
+plot.map <- ggplot(data)+
+    geom_polygon(aes(long, lat, fill=region), usa, alpha=0.5) +
+    geom_point(aes(Longitude, Latitude, color=factor(Group), shape=Dataset), alpha=0.7, size=3) +
+    ## stat_ellipse(aes(lon, lat, color=factor(population), group=population), type="euclid", level=0.02) +
+    scale_fill_iwanthue(cmin=30, cmax=80, lmin=0, lmax=50) +
+    scale_color_brewer(palette = "Set1") +
+    scale_shape_manual(values=c('New'=21, 'Published'=22)) +
+##    scale_color_iwanthue(cmin=30, cmax=80, lmin=35, lmax=80) +
+    coord_quickmap(xlim= bound.lon, ylim=bound.lat) +
+##    facet_wrap("population", ncol=2) +
+    theme_minimal() +
+  theme(legend.position = 'bottom',
+        axis.title=element_blank())
+plot.map
+  #+end_src
+
+  #+RESULTS:
+  [[file:map.png]]
+
+
+- Combine all
+
+  #+HEADER: :results output graphics file  :width 800 :height 600 :bg white
+  #+begin_src R :file combined.png :session pca
+
+plot_grid(plot_grid(pca.plot, grp.plot + theme(legend.position = 'top'), ncol=2, rel_widths = c(1,0.5)),
+          plot.map + theme(legend.position = 'none'), ncol=1, rel_heights = c(1,1))
+  #+end_src
+
+  [[./combined.png]]

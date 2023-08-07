@@ -1,0 +1,38 @@
+# Data available from NCIB
+all.ncbi.complete.bottlenose.mito.fa
+bottlenose.mito.fa
+bottlenose.tRNA-Pro.fasta
+marine_dolphin.refseq.fasta
+
+# indexes for blast, bwa, minimap2, and samtools
+bottlenose.mito.fa.amb
+bottlenose.mito.fa.ann
+bottlenose.mito.fa.bwt
+bottlenose.mito.fa.fai
+bottlenose.mito.fa.mmi
+bottlenose.mito.fa.pac
+bottlenose.mito.fa.sa
+marine_dolphin.refseq.fasta.nhr
+marine_dolphin.refseq.fasta.nin
+marine_dolphin.refseq.fasta.nsq
+mito.amplicon.mmi
+bottlenose.tRNA-Pro.fasta.fai
+marine_dolphin.refseq.fasta.fai
+mito.amplicon.fa.fai
+all.ncbi.complete.bottlenose.mito.fa.fai
+mito.amplicon.dict
+mito.amplicon.rev.dict
+mito.amplicon.rev.fa
+mito.amplicon.rev.fa.fai
+
+# Scripts in readme
+color.sh
+loc.sh
+split.sh
+
+# Sequence created by readme
+mito.amplicon.fa
+tRNA-Pro.region.fa
+
+
+

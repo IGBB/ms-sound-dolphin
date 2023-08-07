@@ -1,0 +1,30 @@
+# Data available from NCIB
+vollmer.samples.fa
+
+# Seqeunces created by readme
+mtCR.region.fa
+
+# Scripts and logs created by readme
+2-raxml/2017/1-run.sh
+2-raxml/2017/2-figtree.sh
+2-raxml/2017/3-color.sh
+2-raxml/2017/run.log
+2-raxml/2021/1-run.sh
+2-raxml/2021/2-figtree.sh
+2-raxml/2021/3-color.sh
+2-raxml/2021/run.log
+
+# Alignment is quick (don't save)
+1-align/
+
+# RAxML tmp files
+2-raxml/2017/RAxML_bipartitionsBranchLabels.vollmer2017
+2-raxml/2017/RAxML_bipartitions.vollmer2017
+2-raxml/2017/RAxML_bootstrap.vollmer2017
+2-raxml/2021/RAxML_bipartitionsBranchLabels.vollmer2021
+2-raxml/2021/RAxML_bipartitions.vollmer2021
+2-raxml/2021/RAxML_bootstrap.vollmer2021
+
+# Intermediate tree images
+2-raxml/2017/figtree.vollmer2017.svg
+2-raxml/2021/figtree.vollmer2021.svg

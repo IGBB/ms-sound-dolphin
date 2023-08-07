@@ -1,0 +1,246 @@
+#+TITLE: Primer Design
+#+PROPERTY:  header-args :var DIR=(file-name-directory buffer-file-name)
+
+
+1) Find highly conserved regions in all marine dolphin mitos
+
+   - bwa fastmap (v0.7.17) [PMID:22569178] finds exact matches between marine
+     dolphin mitos and the bottlenose dolphin mito
+   - awk converts the fastmap outptu to 6 column bed
+   - bedtools genomecov (v2.28.0) [PMID:20110278] counts the overlap of conserved
+     regions
+   - awk filters for conserved regions in all dolphins and removes regions
+     shorter than 24bp
+
+   #+BEGIN_SRC sh :tangle fastmap.sh
+   ROOT=$(git rev-parse --show-toplevel)
+   ml singularity
+
+   bwa () {
+       singularity exec -B$ROOT /apps/singularity-3/bwa/bwa-0.7.17.sif \
+           bwa "$@"
+   }
+
+   bedtools () {
+       singularity exec -B $ROOT /apps/singularity-3/bedtools/bedtools-2.28.0.sif \
+           bedtools "$@"
+   }
+
+   bwa index $ROOT/0-ref/bottlenose.mito.fa
+
+   bwa fastmap $ROOT/0-ref/bottlenose.mito.fa \
+               $ROOT/0-ref/marine_dolphin.refseq.fasta |
+       awk '$1 == "SQ" {sq = $2}
+            $1 == "EM" { print $5, $6, $6 + $3 - $2 - 1, sq, $2, $3 }'\
+                FS="[\t:+]+" OFS="\t" |
+       bedtools genomecov -g $ROOT/0-ref/bottlenose.mito.fa.fai  -i - -bga |
+       awk '$4 == 25 && $3-$2 >= 24 { print $1,$2,$3, "primer" ++c, $3-$2 }' \
+           > primers.bed
+
+   #+END_SRC
+2) Get primer sequences
+
+   #+BEGIN_SRC sh :tangle intersect.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+bedtools () {
+    singularity exec -B $ROOT /apps/singularity-3/bedtools/bedtools-2.28.0.sif \
+        bedtools "$@"
+}
+
+bedtools getfasta \
+    -bed $DIR/primers.bed \
+    -fi $ROOT/0-ref/bottlenose.mito.fa \
+    -fo $DIR/primers.fa \
+    -name
+
+  #+end_src
+3) (Not Needed) Find genes within the conserved regions and conserved regions
+   without genes
+  #+begin_src
+
+bedtools intersect -loj -b bottlenose.anno.gff3 -a primers.bed |
+    awk '$8 == "exon" { sub(".*product=", "", $14); print $1,$2,$3,$4,$5,$14 }' FS='\t' OFS='\t' > primer.exons.bed
+
+
+bedtools intersect -v -b bottlenose.exons.gff3 -a primers.bed > primer.exons.none.bed
+cat primer.exons.bed primer.exons.none.bed | sort -V -k4,4 | sed -e 's/ID=.*\?\(Note\|product\)=//' -e 's/;[^\t]*//' > primers.add-exons
+
+  #+end_src
+4) (Not Needed) Check for NUMTs
+  #+BEGIN_SRC sh :tangle numt.sh
+PATH=$PATH:/usr/local/igbb/samtools-1.9/bin/
+
+awk '/^Primer/ { p=$3 }
+    /Seque/    {contig = $2}
+    /hits forward strand/ { start = $6 }
+    /Amplimer length/ { printf "%s:%d-%d\n", contig, start,   start+$03;
+                        if(start - $3 > 0) printf "%s:%d-%d\n", contig, start-$3,start }' \
+        OFS="\t" selected.primers.dolphin.no-miss |
+    xargs samtools faidx  GCF_011762595.1_mTurTru1.mat.Y_genomic.fna |
+    blastn -subject primer.pairs.seqs.fa -outfmt '6 std qcovs' -max_target_seqs 1
+  #+END_SRC
+
+  #+BEGIN_SRC perl :tangle numt.pl
+
+use strict;
+use warnings;
+
+use JSON::PP;
+
+my $lengths = {};
+open(INDEX, 'GCF_011762595.1_mTurTru1.mat.Y_genomic.fna.fai');
+while(<INDEX>){
+    chomp;
+    $_ = [split];
+    $lengths->{$_->[0]} = $_->[1];
+}
+close INDEX;
+
+open(PRIMER, 'selected.primers.dolphin.no-miss' );
+
+my $labels = {};
+my $primers = [];
+my ($primer, $amplimer, $sequence, $start, $stop, $length);
+
+while(<PRIMER>){
+    chomp;
+    if(/^Primer name (\S*)/){
+        $primer = $1;
+        next;
+    }
+    if(/^Amplimer (\d*)/){
+        $amplimer = $1-1;
+        next;
+    }
+    if(/Sequence: (\S*)/){
+        $sequence = $1;
+        $_ = readline(PRIMER);
+        /chromosome (\S*),/;
+        $labels->{$sequence} = "Chr $1";
+        next;
+    }
+    if(/hits forward strand at (\d*)/){
+        $start = 0+$1;
+        next;
+    }
+    if(/hits reverse strand at \[(\d*)\]/){
+        $stop = $lengths->{$sequence} - $1;
+        next;
+    }
+    if(/Amplimer length: (\d*)/){
+        ($start, $stop) = sort {$a <=> $b} ($start, $stop);
+        warn "$stop-$start (".($stop-$start).") =/= $1"  unless($stop-$start == $1-2);
+        next if $sequence eq "NC_012059.1";
+        push(@$primers, {block_id => $sequence, start=>$start, end=>$stop, name=>$primer, len=>$1+0});
+    }
+}
+
+ my $json = JSON::PP->new->ascii->allow_nonref;
+
+print $json->encode( $labels );
+print $json->encode( $primers );
+
+
+  #+END_SRC
+
+5) Aided by [[https://www.ncbi.nlm.nih.gov/tools/primer-blast/index.cgi][Primer-BLAST]], the locations were then manually screened, modified,
+   and paired to produce ten candidate primer pairs (Table 1). P4, P6, P7, and
+   P10 were chosen after laboratory testing and verification as the best
+   candidates to retrieve the entire mitochondrial genome.
+
+
+
+#+Name: final-pairs
+#+Caption: Primer pairs tested, highlighted pairs were used in final analysis
+| Primer pairs | forward primer              | Length |    Tm |   GC% | Self complementarity | Self 3' complementarity | reverse primer (still in the same strand) | Length |    Tm |   GC% | Self complementarity | Self 3' complementarity | Amplicon length |         Coordinates | reverse primer in complementary strand |
+|--------------+-----------------------------+--------+-------+-------+----------------------+-------------------------+-------------------------------------------+--------+-------+-------+----------------------+-------------------------+-----------------+---------------------+----------------------------------------|
+| P1           | CAGCCCAAAACTCAAAGGACTTGGCGG |     27 | 68.43 | 55.56 |                    4 |                       2 | AAACTGGCTTCAATCTACTTCTCCCGCCGC            |     30 | 70.23 | 53.33 |                    5 |                       3 |            4638 |            571-5209 | GCGGCGGGAGAAGTAGATTGAAGCCAGTTT         |
+| P2           | GAGCCTGGTGATAGCTGGTTGTCCAA  |     26 | 66.55 | 53.85 |                    4 |                       4 | CAAGAAAGGAAGGAATCGAACC                    |     22 | 57.31 | 45.45 |                    4 |                       2 |            5477 |           1453-6930 | GGTTCGATTCCTTCCTTTCTTG                 |
+| P3           | GCTACTTCAGTCTATATACCGCC     |     23 | 58.02 | 47.83 |                    6 |                       2 | AAACTGGCTTCAATCTACTTCTCCCGCCGC            |     30 | 70.23 | 53.33 |                    5 |                       3 |            4540 |            669-5209 | GCGGCGGGAGAAGTAGATTGAAGCCAGTTT         |
+| *P4*         | GTCCTACGTGATCTGAGTTCAGACCGG |     27 | 66.09 | 55.56 |                    8 |                       4 | GACTTCCAATCAGTTAGTTTCGG                   |     23 | 57.47 | 43.48 |                    3 |                       1 |            7005 |           2481-9486 | CCGAAACTAACTGATTGGAAGTC                |
+| P5           | GCTAAATCCTCACTAGATTGGAGGG   |     25 | 60.51 |    48 |                    4 |                       2 | CTTCGTCTTATACCAACGCCTGAGCCC               |     27 | 67.03 | 55.56 |                    5 |                       2 |            6680 |          5100-13015 | GGGCTCAGGCGTTGGTATAAGACGAAG            |
+| *P6*         | GACTTCCAATCAGTTAGTTTCGG     |     23 | 57.47 | 43.48 |                    3 |                       1 | ATGCCGCGTGAAACCAGCAACCCGCT                |     26 | 73.41 | 61.54 |                    4 |                       1 |            6365 |          9460-15825 | AGCGGGTTGCTGGTTTCACGCGGCAT             |
+| *P7*         | CCTCACCACCAACACCCAAAGCTGG   |     25 | 67.88 |    60 |                    4 |                       2 | GCTAAATCCTCACTAGATTGGAGGG                 |     25 | 60.51 |    48 |                    4 |                       2 |            5862 | 15418-16143; 1-5137 | CCCTCCAATCTAGTGAGGATTTAGC              |
+| P8           | CAAGAAAGGAAGGAATCGAACC      |     22 | 57.31 | 45.45 |                    4 |                       2 | CCTCACCACCAACACCCAAAGCTGG                 |     25 | 67.88 |    60 |                    4 |                       2 |            8546 |          6906-15452 | CCTCACCACCAACACCCAAAGCTGG              |
+| P9           | GACTTCCAATCAGTTAGTTTCGG     |     23 | 57.47 | 43.48 |                    3 |                       1 | GAGCCTGGTGATAGCTGGTTGTCCAA                |     26 | 66.55 | 53.85 |                    4 |                       4 |            4637 |  9460-16143; 1-1479 | TTGGACAACCAGCTATCACCAGGCTC             |
+| *P10*        | CAAGAAAGGAAGGAATCGAACC      |     22 | 57.31 | 45.45 |                    4 |                       2 | CTTCGTCTTATACCAACGCCTGAGCCC               |     27 | 67.03 | 55.56 |                    5 |                       2 |            6109 |          6906-13015 | GGGCTCAGGCGTTGGTATAAGACGAAG            |
+
+#+NAME: pair-locations
+| Pair | used | Start |   End |
+|------+------+-------+-------|
+| P1   | F    |   571 |  5209 |
+| P2   | F    |  1453 |  6930 |
+| P3   | F    |   669 |  5209 |
+| P4   | T    |  2481 |  9486 |
+| P5   | F    |  5100 | 13015 |
+| P6   | T    |  9460 | 15825 |
+| P7   | T    | 15418 | 16388 |
+| P7   | T    |     1 |  5137 |
+| P8   | F    |  6906 | 15452 |
+| P9   | F    |  9460 | 16388 |
+| P9   | F    |     1 |  1479 |
+| P10  | T    |  6906 | 13015 |
+
+#+header: :results output file graphics :file primer-locations.png
+#+header: :width 8 :height 6 :units in :res 600
+#+begin_src R :var locs=pair-locations
+library(tidyverse)
+
+colnames(locs) <- c('Pair', 'used', 'Start', 'End')
+
+locs <- locs %>%
+  arrange(, Pair) %>%
+  mutate(pos = (Start+End) / 2, Pair = factor(Pair, levels = paste0('P', 1:10))) %>%
+  mutate(level = as.numeric(Pair)) %>%
+  mutate(ymin=level,
+         ymax=level + as.numeric(used)*0.25 + 0.5)
+
+#colorbrewer pastel for primers not used
+#colorbrewer set1 for primers used
+cols <- c(
+  "P1" = "#b3e2cddd",
+  "P2" = "#fdcdacdd",
+  "P3" = "#cbd5e8dd",
+  "P5" = "#f4cae4dd",
+  "P8" = "#e6f5c9dd",
+  "P9" = "#fff2aedd",
+  "P4" = "#e41a1cff",
+  "P6" = "#377eb8ff",
+  "P7" = "#4daf4aff",
+  "P10"= "#984ea3ff"
+)
+
+label <- function(x){
+  l <- ifelse(x ==1 , "1/16.3Kbp", scales::label_number_si(unit='bp')(x))
+  str(l)
+  return(l)
+}
+
+ggplot(locs,
+       aes(xmax=Start,     xmin=End,
+           ymax=ymax, ymin=level,
+           fill=Pair )) +
+  annotate(geom='rect', xmin=1, xmax=Inf, ymin=-Inf, ymax = 0 , fill='white')+
+  geom_rect() +
+  scale_y_continuous(limits = c(-15, 11), expand = c(0,0)) +
+  scale_fill_manual(values=cols)+
+  scale_alpha_manual(values=c(0.28, 1)) +
+  scale_x_continuous(
+    breaks=c(1, seq(2000, 14000, 2000)),
+    labels=label) +
+  coord_polar(clip='off') +
+  theme_minimal() +
+  theme(plot.background = element_rect(fill='white', color = NA),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+
+#+end_src
+
+#+RESULTS:
+[[file:primer-locations.png]]
+
+#+ATTR_ORG: :width 1000
+[[primer-locations.png]]

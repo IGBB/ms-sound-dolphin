@@ -1,0 +1,209 @@
+#+TITLE: Diversity Stats
+#+PROPERTY:  header-args :var DIR=(my/dir)
+
+
+  #+begin_src shell :tangle mafft.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+samtools () { singularity exec -B $ROOT \
+   /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif samtools $@ ; }
+mafft () { singularity exec -B $ROOT \
+   /apps/singularity-3/mafft/mafft-7.471--h516909a_0.sif mafft "$@" ; }
+
+
+all=$ROOT/3-snps/1-medaka/all.consensus.masked.fa
+
+awk 'NR>1 {print $2,$3}' OFS="\t" $ROOT/5-structure/2-gomx.K5r8.membership \
+    > $DIR/gomx.pop
+
+samtools faidx -r <(cut -f 1 $DIR/gomx.pop) $all > $DIR/gomx.consensus.fa
+
+mafft --auto --thread 48 $DIR/gomx.consensus.fa > $DIR/gomx.mafft.fa
+  #+end_src
+
+  #+RESULTS:
+
+* Nucleotide Diversity (pi)
+#+begin_src R :session mafft.stats :results output drawer
+library(tidyverse)
+library(pegas)
+library(ascii)
+op <- options(asciiType = "org")
+
+fasta <- read.dna("gomx.mafft.fa", format='fasta')
+pop <- read.table("gomx.pop", col.names=c("sample", "pop")) %>%
+  mutate(pop = factor(pop, levels = 1:5, labels = paste0("pop", 1:5)))
+
+fasta.split <- lapply(split(pop$sample, pop$pop) ,
+          function(x) fasta[rownames(fasta) %in% x,])
+fasta.split[['all']] <- fasta
+
+lapply(fasta.split, nuc.div, variance = T) %>%
+  lapply(setNames, c('pi', 'var')) %>%
+  bind_rows(.id='Population') %>%
+  ascii(digits=c(0, 6, 4), format=c('s', 'f', 'e'), include.rownames = F)
+#+end_src
+
+#+RESULTS:
+:results:
+| Population | pi       | var        |
+|------------+----------+------------|
+| pop1       | 0.000809 | 1.6269e-07 |
+| pop2       | 0.000965 | 2.3279e-07 |
+| pop3       | 0.000588 | 9.1937e-08 |
+| pop4       | 0.001827 | 8.1111e-07 |
+| pop5       | 0.000222 | 1.6207e-08 |
+| all        | 0.001126 | 3.0538e-07 |
+:end:
+
+* Population differentiation (Fst )
+
+
+#+begin_src R :session fst
+library(tidyverse)
+library(ape)
+library(adegenet)
+library(hierfstat)
+
+fasta <- read.FASTA("gomx.mafft.fa")
+pop <- read.table("gomx.pop", col.names=c("sample", "pop")) %>%
+  mutate(pop = factor(pop, levels = 1:5, labels = paste0("pop", 1:5))) %>%
+  pull(pop, name=sample)
+pop <- pop[names(fasta)]
+
+genind <- DNAbin2genind(fasta, pop=pop)
+strata(genind) <- data.frame(pop)
+
+all <- wc(genind, diploid = F)
+pair <- pairwise.WCfst(genind, diploid = F) %>%
+  as.data.frame %>%
+  rownames_to_column("PopA") %>%
+  gather(-PopA, key="PopB", value="Fst") %>%
+  filter(PopA < PopB) %>%
+  mutate(class = cut(Fst, breaks=c(0,0.05,0.15,0.25,1),
+                     labels=c("little", "moderate", "great", "very great")))
+
+pair[which.min(pair$Fst),]
+pair[which.max(pair$Fst),]
+
+rbind(c('all', 'all', all$FST, NA, use.names = F), pair)
+#+end_src
+
+#+RESULTS:
+| all  | all  |  0.176820346087899 |            |
+| pop1 | pop2 |  0.231889311152972 | great      |
+| pop1 | pop3 |  0.231318379429998 | great      |
+| pop2 | pop3 |  0.224277130400205 | great      |
+| pop1 | pop4 | 0.0418943102196817 | little     |
+| pop2 | pop4 |  0.344402177516476 | very great |
+| pop3 | pop4 |  0.272991418670716 | very great |
+| pop1 | pop5 |  0.318946751053944 | very great |
+| pop2 | pop5 |  0.556659497093326 | very great |
+| pop3 | pop5 |  0.530181358517292 | very great |
+| pop4 | pop5 |  0.489218665560051 | very great |
+
+
+#+begin_src R :session fst :var dist=fst
+cor(dist$V3, dist$V4, method='spearman')
+#+end_src
+
+#+RESULTS:
+: -0.0545454545454545
+
+* PhiST
+#+begin_src R :session seq.phist
+library(tidyverse)
+library(adegenet)
+library(ape)
+library(poppr)
+
+fasta <- read.FASTA("gomx.mafft.fa")
+pop <- read.table("gomx.pop", col.names=c("sample", "pop")) %>%
+  mutate(pop = factor(pop, levels = 1:5, labels = paste0("pop", 1:5))) %>%
+  pull(pop, name=sample)
+pop <- pop[names(fasta)]
+
+genind <- DNAbin2genind(fasta, pop=pop)
+strata(genind) <- data.frame(pop)
+
+set.seed(8675309)
+values <- paste0("pop1", letters[1:4])
+
+newpop <- as.factor(ifelse(pop == "pop1",
+                           sample(values, size = sum(pop == "pop1"),
+                                  replace = TRUE), as.character(pop)))
+table(newpop)
+#+end_src
+
+#+RESULTS:
+| pop1a | 49 |
+| pop1b | 58 |
+| pop1c | 48 |
+| pop1d | 53 |
+| pop2  | 67 |
+| pop3  | 51 |
+| pop4  | 48 |
+| pop5  | 36 |
+
+
+#+begin_src R :session seq.phist :colnames yes
+genindp <- DNAbin2genind(fasta, pop=newpop)
+strata(genindp) <- data.frame(newpop)
+
+ddp <- as.genclone(genindp)
+phistp <- poppr.amova(ddp, ~newpop, filter=T, threshold=0.1)
+
+phist.subset <- function(pop1, pop2) {
+  pops <- popsub(genindp, sublist = c(pop1, pop2), drop=T)
+  gc <- as.genclone(pops)
+  phistsp <- poppr.amova(gc, ~newpop, filter=T, threshold=0.1)
+  return(unlist(phistsp$statphi))
+}
+
+
+phist.table <- expand_grid(pop1=levels(newpop), pop2=levels(newpop)) %>%
+  filter(!pop2 %in% values & pop1 < pop2) %>%
+  rowwise() %>%
+  mutate(phist = phist.subset(pop1, pop2)) %>%
+  rbind(c('all', 'all', phistp$statphi, use.names = F)) %>%
+  ungroup
+
+#+end_src
+#+begin_src R :session seq.phist :colnames yes
+phist.table %>%
+  separate(pop1, into=c("pop1", "subpop"), sep=c(4)) %>%
+  mutate(subpop = ifelse(subpop=="", 'phist', subpop)) %>%
+  spread(subpop, phist) %>%
+  rowwise() %>%
+  mutate(phist = if_else(is.na(phist),
+                         mean(c_across(letters[1:4]), na.rm=T),
+                         phist))
+#+end_src
+
+#+RESULTS:
+| pop1 | pop2 |                 a |                 b |                 c |                 d |             phist |
+|------+------+-------------------+-------------------+-------------------+-------------------+-------------------|
+| all  | all  |                   |                   |                   |                   | 0.489242052210127 |
+| pop1 | pop2 | 0.582056396788306 | 0.609593951641705 |  0.56869543373251 |  0.52473330412831 | 0.571269771572708 |
+| pop1 | pop3 | 0.533229788556288 | 0.569782816618348 | 0.517948170149971 | 0.463226191154952 |  0.52104674161989 |
+| pop1 | pop4 | 0.284462775458223 | 0.309945957194145 |  0.27665863500994 | 0.237359018330138 | 0.277106596498111 |
+| pop1 | pop5 | 0.760006823719172 |  0.79003449781475 | 0.737107167963808 | 0.676283602207406 | 0.740858022926284 |
+| pop2 | pop3 |                   |                   |                   |                   | 0.371901884970079 |
+| pop2 | pop4 |                   |                   |                   |                   | 0.572938885070196 |
+| pop2 | pop5 |                   |                   |                   |                   | 0.643274957056874 |
+| pop3 | pop4 |                   |                   |                   |                   | 0.518407401068932 |
+| pop3 | pop5 |                   |                   |                   |                   | 0.616229932535865 |
+| pop4 | pop5 |                   |                   |                   |                   | 0.714276375988258 |
+
+|      |      |                   |                 a |                 b |                 c |                 d |
+| all  | all  | 0.567868443778667 |                   |                   |                   |                   |
+| pop1 | pop2 |                   | 0.712283945952139 | 0.668095002367699 | 0.635956907235878 | 0.619341041522879 |
+| pop1 | pop3 |                   | 0.827821963087631 | 0.773596701753797 | 0.736531693334342 | 0.715602033827026 |
+| pop1 | pop4 |                   | 0.544119192654372 | 0.498567644233736 | 0.469572465345465 | 0.455622621224754 |
+| pop1 | pop5 |                   | 0.281002407666379 | 0.236484530410717 | 0.221447707715265 |  0.21338335667526 |
+| pop2 | pop4 |  0.40176063988579 |                   |                   |                   |                   |
+| pop2 | pop5 | 0.567925785096941 |                   |                   |                   |                   |
+| pop2 | pop3 | 0.723949299429428 |                   |                   |                   |                   |
+| pop3 | pop4 | 0.563760076016833 |                   |                   |                   |                   |
+| pop3 | pop5 | 0.632241861519727 |                   |                   |                   |                   |
+| pop4 | pop5 |  0.41403850128847 |                   |                   |                   |                   |

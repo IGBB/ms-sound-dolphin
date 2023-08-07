@@ -1,0 +1,18 @@
+#+TITLE: MS Sound Stranded Dolphins
+
+
+
+ - [[./0-ref/readme.org][Reference Sequences]] :: Description, location, and download info for reference
+   sequences used
+ - [[./1-primer-design/readme.org][Primer Design]] :: Methods used to design universal primers for marine dolphins
+   (/Delphinidae/)
+ - [[./2-samples/readme.org][Samples]] :: Description of newly sequenced samples, including amplicon
+   coverage summary
+ - [[./3-snps/readme.org][Consensus and SNP Calling]] :: Methods used to create consensus sequences and
+   SNP vcfs for each sample. Includes species validation and heterplasmy search.
+ - [[./4-mtCR/readme.org][mtCR analysis]] :: Methods for comparing the mtCR region (pca and phylo)
+ - [[./5-structure/readme.org][Population Structure]] :: Population structure methods, including
+   population/stranding analysis
+ - [[./6-diversity/readme.org][Genetic Diversity]] :: Diversity stats methods using inferred populations from
+   structure analysis
+ - [[./7-stranding/readme.org][Population/Stranding Analysis]] :: Stranding/Spillway testing

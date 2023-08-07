@@ -1,0 +1,492 @@
+#+TITLE: Consensus and SNP calling
+#+PROPERTY:  header-args :var DIR=(my/dir)
+
+
+* Consensus
+:PROPERTIES:
+:ID:       28b215c2-cf17-448b-9f9f-c402c5ccf355
+:END:
+
+1) Creating consensus sequences using medaka (v1.5.0).
+
+  #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+  #+BEGIN_SRC sh :tangle 1-medaka/run.sh
+ROOT=$(git rev-parse --show-toplevel)
+export DIR ROOT
+
+ml singularity
+
+# clean up singularity medaka command. take the first element as subcommand,
+# then remove it from stack. Pass the remaining stack to medaka cmd.
+medaka () {
+    cmd=medaka_$1
+    shift;
+
+    singularity exec -B $ROOT $ROOT/apps/medaka_v1.5.0.sif $cmd $@;
+}
+
+bedtools ()  {
+    singularity exec -B $ROOT \
+        /apps/singularity-3/bedtools/bedtools-2.28.0.sif \
+        bedtools $@
+}
+
+# function to run consensus. hard-link bottlenaose.mito.fa to bypass race
+# condition from running minimap index on the same file in parallel
+run () {
+    name=$1
+    shift;
+    mkdir -p $DIR/1-medaka/$name
+
+    [ -e $DIR/1-medaka/$name/bottlenose.mito.fa ] ||
+        ln $ROOT/0-ref/bottlenose.mito.fa $DIR/1-medaka/$name/bottlenose.mito.fa
+
+    medaka consensus \
+        -i $ROOT/2-samples/0-download/$name.fq \
+        -d $DIR/1-medaka/$name/bottlenose.mito.fa \
+        -o $DIR/1-medaka/$name &> $DIR/1-medaka/$name/run.log
+
+    # mask bases with low coverage
+    bedtools genomecov -bg -ibam $DIR/1-medaka/$name/calls_to_draft.bam |
+        awk '$4 >= 15' |
+        bedtools merge -i - -d 10 |
+        bedtools complement -i - -g $DIR/1-medaka/$name/bottlenose.mito.fa.fai |
+        awk '$3 - $2 > 1' |
+        bedtools maskfasta -soft -bed - \
+            -fi $DIR/1-medaka/$name/consensus.fasta \
+            -fo $DIR/1-medaka/$name/consensus.masked.fasta
+}
+
+export -f medaka bedtools run
+
+parallel -j 20 --eta run {} ::: "${data[@]}"
+  #+END_SRC
+2) Combine consensus sequences
+  #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+  #+begin_src shell :tangle 1-medaka/1-combine.sh
+for name in "${data[@]}"; do
+    sed -e "s/>NC_012059.1/>$name/" -e '/>/s/_/ /' \
+        $DIR/1-medaka/$name/consensus.masked.fasta |
+        fold
+done > $DIR/1-medaka/all.consensus.masked.fa
+  #+end_src
+3) Check species
+
+  Blast consensus sequences against marine dolphins, mark any that map to
+  bottlenose
+
+  #+begin_src sh :tangle 1-medaka/2-check.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+blastn () {
+    singularity exec -B $ROOT \
+        /apps/singularity-3/blast/blast-2.9.0.sif blastn "$@"
+}
+
+blastn -db $ROOT/0-ref/marine_dolphin.refseq.fasta \
+    -query $DIR/1-medaka/all.consensus.masked.fa \
+    -outfmt 6 \
+    -max_target_seqs 1 |
+    awk '$2 != "NC_012059.1"'
+  #+end_src
+
+  #+RESULTS:
+  | SER18-00667 | NC_012051.1 | 99.378 | 16400 |  87 | 12 | 1 | 16399 | 1 | 16386 | 0.0 | 29706 |
+  | SER19-01079 | NC_019588.1 | 98.951 | 16400 | 152 | 16 | 1 | 16395 | 1 | 16385 | 0.0 | 29314 |
+
+  #+NAME: outliers
+  | Sample      | Species            |
+  |-------------+--------------------|
+  | SER18-00667 | Stenella attenuata |
+  | SER19-01079 | Feresa attenuata   |
+4) Combine bottlenose dolphin consensus sequences
+  #+HEADER: :var outliers=outliers[,0]
+  #+begin_src sh :tangle 1-medaka/3-remove.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+samtools () {
+    singularity exec -B $ROOT \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif \
+        samtools "$@" ; }
+
+all=$DIR/1-medaka/all.consensus.masked.fa
+
+samtools faidx $all
+grep -v -f <(printf "%s\n" "${outliers[@]}") $all.fai |
+    cut -f 1 |
+    samtools faidx -r - $all |
+     tr 'acgt' 'N' > $DIR/1-medaka/bottlenose.consensus.masked.fa
+
+  #+end_src
+
+
+* Diploid Clair3
+Calling diploid snps using clair3 (recommended by medaka developers) to assess
+data quality and find heteroplasmy.
+
+Not using =--no_phasing_for_fa= (recommended for haplotype data) because of
+heteroplasmy. Phasing should be useful in splitting the two mito sequences, if
+any are found.
+
+1) run clair3 on primer sequences
+
+   Most heterogeneous SNPs are found near the end of the sequence, The circular
+   nature of mtDNA may have an adverse effect on SNP calling. Running the
+   samples through clair3 using the amplicon sequence alignments instead of the
+   alignments to the complete mito.
+
+   #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+   #+begin_src sh :tangle 2-clair3/1-diploid/run.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+clair3 () {
+    singularity exec -B $ROOT \
+        $ROOT/apps/clair3_v0.1-r10.sif \
+        run_clair3.sh "$@"
+}
+
+export DIR ROOT
+export -f clair3
+
+parallel -j12 --eta --timeout 300% \
+    clair3 --bam_fn=$ROOT/2-samples/1-align/{}.bam \
+    --ref_fn=$ROOT/0-ref/mito.amplicon.fa \
+    --threads=4 \
+    --platform="ont" \
+    --model="/opt/models/r941_prom_hac_g360+g422" \
+    --include_all_ctgs \
+    --output=$DIR/2-clair3/1-diploid/{} \
+    '&>' $DIR/2-clair3/1-diploid/{}.log \
+    ::: "${data[@]}"
+     #+end_src
+2) Find heteroplasmic samples
+   #+begin_src R :colnames nil
+library(data.table)
+library(tidyverse)
+
+files <- list.files("2-clair3/1-diploid/", pattern="merge_output.vcf.gz$",
+           full.names = T, recursive = T)
+names(files) <- basename(dirname(files))
+
+data <- lapply(files, fread) %>%
+  bind_rows(.id="Sample") %>%
+  separate_rows(FORMAT, SAMPLE, sep=":") %>%
+  spread(FORMAT, SAMPLE)
+
+sep.data <- sep.data %>% mutate(Genotype = factor(GT,
+                                                  c('0/1', '1/2', '1/1'),
+                                                  c("Heterogeneous", "Heterogeneous", "Homogeneous")))
+
+snps.summary <- sep.data %>%
+  filter(QUAL >= 20 & GQ >= 20 ) %>%
+   group_by(Sample, Genotype) %>%
+   count() %>%
+   spread(Genotype, n, fill=0)
+
+snps.summary %>%
+  filter(Heterogeneous > 0) %>%
+  arrange(desc(Heterogeneous))
+
+     #+end_src
+
+   #+NAME: heteroplasmic-samples
+   | Sample      | Heterogeneous | Homogeneous |
+   |-------------+---------------+-------------|
+   | SER11-0942  |            37 |         186 |
+   | SER10-0256  |            15 |          97 |
+   | SER13-0420  |            15 |         239 |
+   | SER11-1021  |             4 |         292 |
+   | SER11-0003  |             2 |         307 |
+   | SER11-0092  |             2 |         277 |
+   | SER11-2497  |             2 |         318 |
+   | SER16-00042 |             2 |         307 |
+   | SER16-00372 |             2 |         301 |
+   | SER19-00019 |             2 |         226 |
+   | SER20-00273 |             2 |         312 |
+   | SER21-01138 |             2 |         306 |
+   | SER10-0065  |             1 |         142 |
+   | SER10-0326  |             1 |         310 |
+   | SER10-0774  |             1 |         303 |
+   | SER10-0775  |             1 |         231 |
+   | SER11-0038  |             1 |         304 |
+   | SER11-0413  |             1 |         299 |
+   | SER11-1482  |             1 |         264 |
+   | SER13-0409  |             1 |         225 |
+   | SER13-0527  |             1 |         283 |
+   | SER15-00383 |             1 |         297 |
+   | SER18-00063 |             1 |         308 |
+   | SER18-00078 |             1 |         305 |
+   | SER18-00080 |             1 |         305 |
+   | SER19-00131 |             1 |         307 |
+   | SER19-00132 |             1 |         128 |
+   | SER19-01040 |             1 |         311 |
+   | SER20-00106 |             1 |         301 |
+   | SER20-00261 |             1 |         307 |
+   | SER20-00269 |             1 |         290 |
+   | SER20-00275 |             1 |         308 |
+   | SER20-00362 |             1 |         309 |
+   | SER21-00172 |             1 |         302 |
+   | SER21-01066 |             1 |         316 |
+   | SER21-01210 |             1 |         316 |
+   | SER21-01214 |             1 |         311 |
+   | SER21-01282 |             1 |         135 |
+3) Merge VCF
+
+   Merge vcfs from clair3 using amplicon sequences, fixing the names (clair3
+   gave every sample the same name, 'SAMPLE'), removing unused alternative
+   alleles.
+
+  #+HEADER: :var all=../2-samples/data.ser.org:data[,0]
+  #+begin_src sh :tangle 2-clair3/1-diploid/merge.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/bcftools-1.15/:$PATH
+
+prefix="$DIR/2-clair3/1-diploid"
+
+printf "$prefix/%s/merge_output.vcf.gz\n" "${all[@]}" |
+    bcftools merge --force-samples -o - -m all -O v -l - |
+    bcftools reheader -s <(printf "%s\n" "${all[@]}") -  |
+    bcftools view --trim-alt-alleles > $DIR/2-clair3/1-call-amplicon-diploid/merged.vcf
+
+  #+end_src
+
+* Haploid Clair3
+
+1) run clair3 on primer sequences
+
+   #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+   #+begin_src sh :tangle 2-clair3/2-haploid/run.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+clair3 () {
+    singularity exec -B $ROOT \
+        $ROOT/apps/clair3_v0.1-r10.sif \
+        run_clair3.sh "$@"
+}
+
+export DIR ROOT
+export -f clair3
+
+parallel -j12 --eta --timeout 300% \
+    clair3 --bam_fn=$ROOT/2-samples/1-align/{}.bam \
+    --ref_fn=$ROOT/0-ref/mito.amplicon.fa \
+    --threads=4 \
+    --platform="ont" \
+    --model="/opt/models/r941_prom_hac_g360+g422" \
+    --include_all_ctgs \
+    --haploid_sensitive \
+    --no_phasing_for_fa \
+    --gvcf \
+    --output=$DIR/2-clair3/2-haploid/{} \
+    '&>' $DIR/2-clair3/2-haploid/{}.log \
+    ::: "${data[@]}"
+     #+end_src
+
+   - Convert gVCF to VCF, fixing some issues with clari3 output to make it
+     compatible with bcftools
+
+     #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+     #+begin_src sh :tangle 2-clair3/2-haploid/convert.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/bcftools-1.15/:$PATH
+
+parallel -j4 --eta \
+    bcftools convert --gvcf2vcf -f $ROOT/0-ref/mito.amplicon.fa \
+        $DIR/2-clair3/2-haploid/{}/merge_output.gvcf.gz '|' \
+        sed -e "'s/\\([ACGT]\\)\\t<NON_REF>/\\1\\t\\1/'" \
+            -e "'s#/[0.]:#:#'" '|'  \
+        bcftools view \
+           -o $DIR/2-clair3/2-haploid/{}/merge_output.all.vcf.gz \
+           - \
+    ::: "${data[@]}"
+     #+end_src
+   - Index VCF
+     #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+     #+begin_src sh :tangle 2-clair3/2-haploid/index.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/bcftools-1.15/:$PATH
+
+parallel -j4 --eta \
+    bcftools index \
+      $DIR/2-clair3/2-haploid/{}/merge_output.all.vcf.gz \
+      '&>' $DIR/2-clair3/2-haploid/{}.index.log \
+        ::: "${data[@]}"
+     #+end_src
+2) Merge VCF
+
+   Merge vcfs from clair3 using amplicon sequences, fixing the names (clair3
+   gave every sample the same name, 'SAMPLE'), removing unused alternative
+   alleles, and removing samples that appear to originate from other species
+   base on the best blast hit of the consensus sequence to all marine dolphins
+   or appear to have considerable heteroplasmy.
+
+  #+HEADER: :var all=../2-samples/data.ser.org:data[,0]
+  #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+  #+HEADER: :var outliers=outliers[,0]
+  #+begin_src sh :tangle 2-clair3/2-haploid/merge.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/bcftools-1.15/:$PATH
+
+keep=( $(xargs -n1 <<<"${all[@]}" |
+           grep -v -x -f <(xargs -n1 <<<"${outliers[@]} ${plasmic[@]}")) )
+
+prefix="$DIR/2-clair3/2-haploid"
+
+printf "$prefix/%s/merge_output.all.vcf.gz\n" "${keep[@]}" |
+    bcftools merge --force-samples -o - -m all -O v -l - |
+    bcftools reheader -s <(printf "%s\n" "${keep[@]}") -  |
+    bcftools view --trim-alt-alleles > $DIR/2-clair3/2-haploid/merged.vcf
+
+  #+end_src
+3) Filter VCF
+   #+begin_src sh :tangle 2-clair3/2-haploid/filter.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+vcftools ()
+{
+    singularity exec -B $ROOT \
+        /apps/singularity-3/vcftools/vcftools-v0.1.16-1-deb_cv1.sif vcftools $@
+}
+
+vcftools --vcf $DIR/2-clair3/2-haploid/merged.vcf \
+        --recode --stdout \
+        --recode-INFO-all \
+        --max-alleles 2 \
+        --remove-indels \
+        > $DIR/2-clair3/2-haploid/filtered.vcf
+   #+end_src
+
+* Finalize
+
+#+HEADER: :var all=../2-samples/data.ser.org:data[,0]
+#+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+#+HEADER: :var outliers=outliers[,0]
+#+begin_src sh :tangle 2-clair3/2-haploid/merge.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/bcftools-1.15/:$PATH
+
+keep=( $(xargs -n1 <<<"${all[@]}" |
+           grep -v -x -f <(xargs -n1 <<<"${outliers[@]} ${plasmic[@]}")) )
+echo ${#keep[@]}
+#+end_src
+
+#+RESULTS:
+: 413
+
+- Consensus sequences
+  #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+  #+HEADER: :var outliers=outliers[,0]
+  #+begin_src sh :tangle final.seqs.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity 
+samtools () 
+{ 
+    singularity exec -B $ROOT \
+        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif samtools $@
+}
+
+
+all=$DIR/1-medaka/all.consensus.masked.fa
+
+samtools faidx $all
+grep -v -f <(printf "%s\n" "${outliers[@]}" "${plasmic[@]}") $all.fai |
+    cut -f 1 |
+    samtools faidx -r - $all |
+     tr 'acgt' 'N' > $DIR/consensus.masked.fa
+
+  #+end_src
+
+  #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+grep '>' -c  $DIR/consensus.masked.fa
+  #+end_src
+
+  #+RESULTS:
+  : 413
+
+- Vcf
+  #+begin_src tmux :session dolphin:hawk-1
+cp $DIR/2-clair3/2-haploid/filtered.vcf $DIR/
+  #+end_src
+
+  #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+awk '/^#CHROM/ {print NF-9} ' $DIR/filtered.vcf
+  #+end_src
+
+  #+RESULTS:
+  : 413
+
+
+
+  - Called SNPs per amplicon
+    #+header: :colnames '("Amplicon" "SNPs")
+    #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+awk '!/^#/ && $7 == "PASS" {_[$1]++}
+           END{
+                for(i in _){
+                      print i, _[i];
+                      sum+=_[i]
+                 };
+                 print "|---";
+                 print "Total", sum
+                }' OFS="\t" $DIR/2-clair3/2-haploid/merged.vcf
+    #+end_src
+
+    #+RESULTS:
+    | Amplicon | SNPs |
+    |----------+------|
+    | P4       |  213 |
+    | P10      |  161 |
+    | P6       |  220 |
+    | P7       |  164 |
+    |          |  --- |
+    | Total    |  758 |
+  - Passed SNPs per amplicon
+    #+header: :colnames '("Amplicon" "SNPs")
+    #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+awk '!/^#/ && $7 == "PASS" {_[$1]++}
+           END{
+                for(i in _){
+                      print i, _[i];
+                      sum+=_[i]
+                 };
+                 print "|---";
+                 print "Total", sum
+                }' OFS="\t" $DIR/filtered.vcf
+    #+end_src
+
+    #+RESULTS:
+    | Amplicon | SNPs |
+    |----------+------|
+    | P4       |  210 |
+    | P10      |  158 |
+    | P6       |  215 |
+    | P7       |  160 |
+    |          |  --- |
+    | Total    |  743 |
+
+
+ - Total Passed SNPs on mito
+    #+begin_src bash :dir (format "%s" ssh-deploy-root-remote)
+awk 'BEGIN {
+            coord["P4"]  = 2481;
+            coord["P6"]  = 9460;
+            coord["P7"]  = 15418;
+            coord["P10"] = 6906;
+           }
+    !/^#/ && $7 == "PASS" {
+        pos = $2 + coord[$1];
+        if(pos > 16388)
+            pos = pos - 16388;
+        if(_[pos]!=1)
+            count++;
+        _[pos]=1;
+    }
+    END { print count } ' $DIR/filtered.vcf
+    #+end_src
+
+    #+RESULTS:
+    : 481
