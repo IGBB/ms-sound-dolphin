@@ -103,12 +103,24 @@ rbind(c('all', 'all', all$FST, NA, use.names = F), pair)
 | pop4 | pop5 |  0.489218665560051 | very great |
 
 
-#+begin_src R :session fst :var dist=fst
+#+name: fst+dist
+| pop1 | pop2 |  0.231889311152972 | 16.95 |
+| pop1 | pop3 |  0.231318379429998 |  1.74 |
+| pop1 | pop4 | 0.0418943102196817 | 31.18 |
+| pop1 | pop5 |  0.318946751053944 | 26.81 |
+| pop2 | pop3 |  0.224277130400205 | 16.55 |
+| pop2 | pop4 |  0.344402177516476 | 47.96 |
+| pop2 | pop5 |  0.556659497093326 |  9.87 |
+| pop3 | pop4 |  0.272991418670716 | 31.98 |
+| pop3 | pop5 |  0.530181358517292 | 26.42 |
+| pop4 | pop5 |  0.489218665560051 | 57.71 |
+
+#+begin_src R :session fst :var dist=fst+dist
 cor(dist$V3, dist$V4, method='spearman')
 #+end_src
 
 #+RESULTS:
-: -0.0545454545454545
+: 0.163636363636364
 
 * PhiST
 #+begin_src R :session seq.phist

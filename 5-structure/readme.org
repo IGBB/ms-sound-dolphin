@@ -523,17 +523,19 @@ ggplot(data)+
 7) ArcMap
      #+begin_src bash
 convert \
-\( 2-gomx-K5r7-arcmap-all.png -trim -shave 1x1 \
+\( ArcGIS/All_Pop.tif -trim -shave 1x1 \
     \( -background transparent -fill black -pointsize 36 \
              -size 1800x1800 -gravity center label:A \
              -trim +repage -bordercolor none -border 10x10 \) \
           -gravity northeast -composite \) \
-\( 2-gomx-K5r7-arcmap-pop?.png -trim -shave 1x1 -append \
+\( ArcGIS/Pop?.tif -trim -shave 1x1 -append \
     \( -background transparent -fill black -pointsize 36 \
              -size 1800x1800 -gravity center label:B \
              -trim +repage -bordercolor none -border 10x10 \) \
           -gravity northeast -composite \) \
-   -bordercolor black -border 1 -append 2-gomx-K5r7-arcmap-fig.png
+   -bordercolor black -border 1 -append 2-gomx-K5r8-arcmap-fig.png
  #+end_src
+
+ #+RESULTS:
 
 #+RESULTS:
