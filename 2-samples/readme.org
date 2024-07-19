@@ -1,5 +1,5 @@
 #+TITLE: Gulf of Mexico Samples
-#+PROPERTY:  header-args :var DIR=(my/dir)
+#+PROPERTY:  header-args :var DIR=(file-name-directory buffer-file-name)
 
 Sample table is in [[./data.ser.org]] to condense document.
 
@@ -16,18 +16,14 @@ done
 2) Align raw data to amplicon sequences using minimap2
   #+begin_src sh :tangle 1-align/run.sh :var data=data.ser.org:data[,0]
 ROOT=$(git rev-parse --show-toplevel)
-ml singularity minimap2/2.17 samtools/v1.9-4-deb_cv1
-
-samtools () {
-    singularity exec -B $ROOT \
-        /apps/singularity-3/samtools/samtools-v1.9-4-deb_cv1.sif \
-        samtools "$@" ; }
+PATH=$ROOT/apps/samtools-1.17/:$PATH
+PATH=$ROOT/apps/minimap2-2.26_x64-linux/:$PATH
 
 map () {
     name=$1
 
     minimap2 -ax map-ont -t4 \
-            $ROOT/0-ref/mito.amplicon.mmi \
+            $ROOT/0-ref/mito.amplicon.fa \
             $DIR/0-download/$name.fq |
         samtools view -bS - |
         samtools sort -o $DIR/1-align/$name.bam -
@@ -35,9 +31,9 @@ map () {
 }
 
 export ROOT DIR
-export -f samtools map
+export -f map
 
-parallel --eta -j12 map {} ::: "${data[@]}"
+parallel --eta -j1 map {} ::: "${data[@]}"
 
 
   #+end_src

@@ -1,5 +1,7 @@
 #+title: Data
 
+All samples with SRA accession
+:data-table:
 #+name: data
 | sample_name  | accession   |
 |--------------+-------------|
@@ -422,42 +424,47 @@
 | SER21-01279  | SRR19396959 |
 | SER21-01281  | SRR19396783 |
 | SER21-01282  | SRR19396782 |
-
+:end:
 
 #+NAME: partial
-| SER10-0106  |
-| SER11-0040  |
-| SER11-0125  |
-| SER11-1281  |
-| SER11-1421  |
-| SER11-1463  |
-| SER11-2252  |
-| SER11-2358  |
-| SER11-2425  |
-| SER12-0271  |
-| SER12-0284  |
-| SER12-0678  |
-| SER12-0679  |
-| SER12-0735  |
-| SER13-0409  |
-| SER13-0635  |
-| SER13-0641  |
-| SER16-00048 |
-| SER16-00070 |
-| SER16-00473 |
-| SER17-00382 |
-| SER19-00019 |
-| SER19-00132 |
-| SER19-00351 |
-| SER19-00352 |
-| SER19-00441 |
-| SER19-00442 |
-| SER19-00443 |
-| SER19-00453 |
-| SER19-00895 |
-| SER19-00922 |
-| SER21-01282 |
-| SER21-00940 |
+| sample      | P4 | P6 | P7 | P10 |
+|-------------+----+----+----+-----|
+| SER11-0040  | X  | X  | X  | Y   |
+| SER11-2252  | X  | X  | X  | Y   |
+| SER11-2425  | X  | X  | X  | Y   |
+| SER12-0271  | X  | X  | X  | Y   |
+| SER11-1421  | X  | X  | Y  | X   |
+| SER16-00070 | X  | X  | Y  | X   |
+| SER12-0284  | X  | Y  | X  | X   |
+| SER13-0641  | X  | Y  | X  | X   |
+| SER12-0679  | X  | Y  | X  | Y   |
+| SER19-00132 | X  | Y  | X  | Y   |
+| SER21-01282 | X  | Y  | X  | Y   |
+| SER10-0106  | X  | Y  | Y  | Y   |
+| SER11-0125  | X  | Y  | Y  | Y   |
+| SER11-1463  | X  | Y  | Y  | Y   |
+| SER13-0409  | X  | Y  | Y  | Y   |
+| SER16-00048 | X  | Y  | Y  | Y   |
+| SER16-00473 | X  | Y  | Y  | Y   |
+| SER17-00382 | X  | Y  | Y  | Y   |
+| SER19-00019 | X  | Y  | Y  | Y   |
+| SER19-00922 | X  | Y  | Y  | Y   |
+| SER19-00895 | X  | Y  | Y  | Y   |
+| SER21-00940 | X  | Y  | Y  | Y   |
+| SER13-0635  | Y  | X  | X  | X   |
+| SER12-0735  | Y  | X  | Y  | X   |
+| SER19-00351 | Y  | X  | Y  | X   |
+| SER11-2358  | Y  | X  | Y  | Y   |
+| SER12-0678  | Y  | Y  | X  | X   |
+| SER11-1281  | Y  | Y  | Y  | X   |
+| SER19-00352 | Y  | Y  | Y  | X   |
+| SER19-00441 | Y  | Y  | Y  | X   |
+| SER19-00442 | Y  | Y  | Y  | X   |
+| SER19-00443 | Y  | Y  | Y  | X   |
+| SER19-00453 | Y  | Y  | Y  | X   |
+
+
+
 
 #+NAME: complete
 | SER10-0003   |

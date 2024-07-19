@@ -1,0 +1,640 @@
+#+TITLE: Consensus and SNP calling
+#+PROPERTY:  header-args :var DIR=(file-name-directory buffer-file-name)
+
+
+* Clair3
+Calling diploid snps using clair3 (recommended by medaka developers) to assess
+data quality and find heteroplasmy.
+
+Not using =--no_phasing_for_fa= (recommended for haplotype data) because of
+heteroplasmy. Phasing should be useful in splitting the two mito sequences, if
+any are found.
+
+1) run clair3 on primer sequences
+
+   Most heterogeneous SNPs are found near the end of the sequence, The circular
+   nature of mtDNA may have an adverse effect on SNP calling. Running the
+   samples through clair3 using the amplicon sequence alignments instead of the
+   alignments to the complete mito.
+
+   #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+   #+begin_src sh :tangle 1-clair3/run.sh
+ROOT=$(git rev-parse --show-toplevel)
+ml singularity
+
+clair3 () {
+    singularity exec -B $ROOT \
+        $ROOT/apps/clair3_v0.1-r10.sif \
+        run_clair3.sh "$@"
+}
+
+export DIR ROOT
+export -f clair3
+
+parallel -j12 --eta --timeout 300% \
+    clair3 --bam_fn=$ROOT/2-samples/1-align/{}.bam \
+    --ref_fn=$ROOT/0-ref/mito.amplicon.fa \
+    --threads=4 \
+    --platform="ont" \
+    --model="/opt/models/r941_prom_hac_g360+g422" \
+    --include_all_ctgs \
+    --output=$DIR/1-clair3/{} \
+    '&>' $DIR/1-clair3/{}.log \
+    ::: "${data[@]}"
+     #+end_src
+2) Find heteroplasmic samples
+   #+begin_src R :colnames nil
+library(data.table)
+library(tidyverse)
+
+files <- list.files("1-clair3/",
+                    pattern="merge_output.vcf.gz$",
+                    full.names = T, recursive = T)
+names(files) <- basename(dirname(files))
+
+data <- lapply(files, fread) %>%
+  bind_rows(.id="Sample") %>%
+  separate_rows(FORMAT, SAMPLE, sep=":") %>%
+  spread(FORMAT, SAMPLE)
+
+sep.data <- sep.data %>%
+  mutate(Genotype = factor(GT,
+                           c('0/1', '1/2', '1/1'),
+                           c("Heterogeneous",
+                             "Heterogeneous",
+                             "Homogeneous")))
+
+snps.summary <- sep.data %>%
+  filter(QUAL >= 20 & GQ >= 20 ) %>%
+   group_by(Sample, Genotype) %>%
+   count() %>%
+   spread(Genotype, n, fill=0)
+
+snps.summary %>%
+  filter(Heterogeneous > 0) %>%
+  arrange(desc(Heterogeneous))
+
+     #+end_src
+
+   #+NAME: heteroplasmic-samples
+   | Sample      | Heterogeneous | Homogeneous |
+   |-------------+---------------+-------------|
+   | SER11-0942  |            37 |         186 |
+   | SER10-0256  |            15 |          97 |
+   | SER13-0420  |            15 |         239 |
+   | SER11-1021  |             4 |         292 |
+   | SER11-0003  |             2 |         307 |
+   | SER11-0092  |             2 |         277 |
+   | SER11-2497  |             2 |         318 |
+   | SER16-00042 |             2 |         307 |
+   | SER16-00372 |             2 |         301 |
+   | SER19-00019 |             2 |         226 |
+   | SER20-00273 |             2 |         312 |
+   | SER21-01138 |             2 |         306 |
+   | SER10-0065  |             1 |         142 |
+   | SER10-0326  |             1 |         310 |
+   | SER10-0774  |             1 |         303 |
+   | SER10-0775  |             1 |         231 |
+   | SER11-0038  |             1 |         304 |
+   | SER11-0413  |             1 |         299 |
+   | SER11-1482  |             1 |         264 |
+   | SER13-0409  |             1 |         225 |
+   | SER13-0527  |             1 |         283 |
+   | SER15-00383 |             1 |         297 |
+   | SER18-00063 |             1 |         308 |
+   | SER18-00078 |             1 |         305 |
+   | SER18-00080 |             1 |         305 |
+   | SER19-00131 |             1 |         307 |
+   | SER19-00132 |             1 |         128 |
+   | SER19-01040 |             1 |         311 |
+   | SER20-00106 |             1 |         301 |
+   | SER20-00261 |             1 |         307 |
+   | SER20-00269 |             1 |         290 |
+   | SER20-00275 |             1 |         308 |
+   | SER20-00362 |             1 |         309 |
+   | SER21-00172 |             1 |         302 |
+   | SER21-01066 |             1 |         316 |
+   | SER21-01210 |             1 |         316 |
+   | SER21-01214 |             1 |         311 |
+   | SER21-01282 |             1 |         135 |
+3) Merge VCF
+
+   Merge vcfs from clair3 using amplicon sequences, fixing the names (clair3
+   gave every sample the same name, 'SAMPLE'), removing unused alternative
+   alleles.
+
+  #+HEADER: :var all=../2-samples/data.ser.org:data[,0]
+  #+begin_src sh :tangle 1-clair3/merge.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/bcftools-1.15/:$PATH
+
+prefix="$DIR/2-clair3/1-diploid"
+
+printf "$prefix/%s/merge_output.vcf.gz\n" "${all[@]}" |
+    bcftools merge --force-samples -o - -m all -O v -l - |
+    bcftools reheader -s <(printf "%s\n" "${all[@]}") -  |
+    bcftools view --trim-alt-alleles \
+        > $DIR/1-clair3/merged.vcf
+
+  #+end_src
+
+* Full mitogenome
+1) Creating consensus amplicon sequences using medaka (v1.5.0).
+
+  #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+  #+BEGIN_SRC sh :tangle 2-full-mito/1-medaka/run.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/bedtools-2.30.0/bin:$PATH
+PATH=$ROOT/apps/ncbi-blast-2.14.0/bin:$PATH
+PATH=$ROOT/apps/samtools-1.17/bin:$PATH
+
+module load singularity
+
+name="${data[$SLURM_ARRAY_TASK_ID]}"
+
+cp $ROOT/0-ref/mito.amplicon.fa $TMPDIR
+
+singularity exec -B $ROOT -B $TMPDIR \
+    $ROOT/apps/medaka_v1.5.0.sif \
+    medaka_consensus -g \
+    -i $ROOT/2-samples/0-download/$name.fq \
+    -d $TMPDIR/mito.amplicon.fa \
+    -o $TMPDIR/
+
+rm $TMPDIR/mito.amplicon.fa{,.fai,.mmi}
+
+tar --transform="s#^./##" \
+    -C $TMPDIR \
+    -cf $DIR/2-full-mito/1-medaka/$name.tar .
+
+  #+end_src
+2) Assemble consensus amplicons with CAP3
+  #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+  #+begin_src shell :tangle 2-full-mito/2-cap3/run.sh
+ROOT=$(git rev-parse --show-toplevel)
+
+ml parallel
+
+for name in "${data[@]}"; do
+    mkdir $TMPDIR/$name
+    tar -C $TMPDIR/$name -xf $DIR/2-full-mito/1-medaka/$name.tar \
+        consensus.fasta
+done
+
+parallel $ROOT/apps/CAP3/cap3 $TMPDIR/{}/consensus.fasta \
+    '&>' $TMPDIR/{}/log \
+    ::: "${data[@]}"
+
+parallel tar -C $TMPDIR/{} \
+    -cf $DIR/2-full-mito/2-cap3/{}.tar \
+    --transform='s#^./##' . \
+    ::: "${data[@]}"
+
+  #+END_SRC
+
+   Partial genomes
+  #+HEADER: :var data=../2-samples/data.ser.org:partial
+  #+begin_src shell :tangle 2-full-mito/2-cap3/partial.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/samtools-1.17/:$PATH
+DIR=$ROOT/3-assemble/
+
+primers=("" "P4_0" "P6_0" "P7_0" "P10_0")
+
+for name in "${!data[@]}"; do
+    echo $name
+    dir=$(mktemp -d)
+    tar -Oxf $DIR/2-full-mito/1-medaka/$name.tar \
+         consensus.fasta > $dir/all.fasta
+
+    sed -n '/Y/=' <<<"${data[$name]}" |
+        while read i; do echo "${primers[$i]}"; done |
+        samtools faidx -r - $dir/all.fasta \
+            > $dir/consensus.fasta
+    rm $dir/all.fasta
+
+    $ROOT/apps/CAP3/cap3 $dir/consensus.fasta \
+        &> $dir/log
+
+    tar -C $dir -cf $DIR/2-full-mito/2-cap3/$name.tar \
+        --remove-files --transform='s#^./##' .
+done
+  #+END_SRC
+3) Combine consensus sequences
+  #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+  #+begin_src shell :tangle 2-full-mito/3-combine.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/samtools-1.17/:$PATH
+DIR=$ROOT/3-assemble/
+
+for name in "${data[@]}"; do
+    file=$(mktemp)
+    tar -Oxf $DIR/2-full-mito/2-cap3/$name.tar \
+        consensus.fasta.cap.{contigs,singlets}  > $file
+    count=$(grep -c ">" $file)
+    if [ "$count" -eq "1" ]; then
+        sed -e "s/>.*/>$name/" $file | fold
+    fi
+    rm $file
+done > $DIR/2-full-mito/3-combine.fa
+
+rm $DIR/2-full-mito/3-combine.fa.fai
+samtools faidx $DIR/2-full-mito/3-combine.fa
+  #+end_src
+
+     Five samples had multiple contigs. All five are partials
+    #+HEADER: :var data=../2-samples/data.ser.org:partial
+  #+begin_src shell :colnames '("Sample" "P4" "P6" "P7" "P10")
+ROOT=$(git rev-parse --show-toplevel)
+
+awk 'NR > 1 { print $2 }' $ROOT/2-samples/2-coverage.tbl |
+    grep -f <(cut -f 1 2-full-mito/3-combine.fa.fai) -v -w |
+    while read name; do
+        printf "$name"
+        printf "\t%c"  ${data[$name]}
+        printf "\n"
+        done
+  #+end_src
+
+  #+RESULTS:
+  | Sample     | P4 | P6 | P7 | P10 |
+  |------------+----+----+----+-----|
+  | SER12-0678 | Y  | Y  | X  | X   |
+4) Trim overlapping regions 
+
+   #+begin_src tmux :session dolphin:local
+export BLAST_USAGE_REPORT=false
+ROOT=$(git rev-parse --show-toplevel)
+DIR=$ROOT/3-assemble/
+PATH=$ROOT/apps/samtools-1.17/:$PATH
+PATH=$ROOT/apps/EMBOSS-6.6.0/bin/:$PATH
+LD_LIBRARY_PATH=$ROOT/apps/EMBOSS-6.6.0/lib/:$LD_LIBRARY_PATH
+
+fasta=$DIR/2-full-mito/3-combine.fa
+
+awk '$2 > 16000 {print $1}' $fasta.fai |
+    while read contig; do
+        merger \
+            -asequence <(samtools faidx $fasta "$contig:1-4000")\
+            -bsequence <(samtools faidx $fasta "$contig:4001-") \
+            -outfile /dev/null \
+            -outseq /dev/stdout |
+            sed "s/>.*/>$contig/" |
+            tr acgt ACGT
+    done > $DIR/2-full-mito/4-rotated.fa
+
+rm $DIR/2-full-mito/4-rotated.fa.fai
+samtools faidx $DIR/2-full-mito/4-rotated.fa
+
+   #+end_src
+5) fixstart 
+
+  #+begin_src tmux :session dolphin:local
+ROOT=$(git rev-parse --show-toplevel)
+DIR=$ROOT/3-assemble/
+PATH=$ROOT/apps/samtools-1.17/:$PATH
+ml singularity
+
+samtools faidx $ROOT/0-ref/bottlenose.mito.fa \
+    NC_012059.1:1-150 > $ROOT/0-ref/start.fa
+singularity exec -B $ROOT $ROOT/apps/circlator_1.5.5.sif \
+    circlator fixstart --genes_fa $ROOT/0-ref/start.fa \
+    $DIR/2-full-mito/4-rotated.fa \
+    $DIR/2-full-mito/5-fixstart
+
+rm  $DIR/2-full-mito/5-fixstart.fasta.fai
+samtools faidx $DIR/2-full-mito/5-fixstart.fasta
+  #+end_src
+6) Length stats
+     #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+     #+HEADER: :var outliers=outliers[,0]
+     #+begin_src shell
+ROOT=$(git rev-parse --show-toplevel)
+
+grep -v -f <(printf "%s\n" "${outliers[@]}" "${plasmic[@]}") \
+         $DIR/2-full-mito/5-fixstart.fasta.fai |
+    sort -k1,1 |
+    join -1 1 -2 2  - <(sort -k2,2 $ROOT/2-samples/2-coverage.tbl) |
+ awk '!_[$11]++ {max[$11] = $2; min[$11] = $2}
+      max[$11] < $2 {max[$11] = $2}
+      min[$11] > $2 {min[$11] = $2}
+      END { for ( i in _ ) printf "%s\t%d\t[%d-%d]\n",
+      i, _[i], min[i], max[i]}'
+
+     #+end_src
+
+     #+RESULTS:
+     | Complete | 380 | [16387-16405] |
+     | Partial  |   6 | [16389-16390] |
+
+     #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+     #+HEADER: :var outliers=outliers[,0]
+     #+HEADER: :var data=../2-samples/data.ser.org:partial
+     #+begin_src shell
+ROOT=$(git rev-parse --show-toplevel)
+
+grep -v -f <(printf "%s\n" "${outliers[@]}" "${plasmic[@]}") \
+         $DIR/2-full-mito/5-fixstart.fasta.fai |
+    sort -k1,1 |
+    join -1 1 -2 2  - <(sort -k2,2 $ROOT/2-samples/2-coverage.tbl) |
+ awk '$11 == "Partial" {print $1}' |
+ while read acc; do
+     printf "$acc";
+     printf "\t%c" ${data[$acc]}
+     printf "\n";
+     done
+     #+end_src
+
+     #+RESULTS:
+     | Sample      | P4 | P6 | P7 | P10 |
+     |-------------+----+----+----+-----|
+     | SER11-1281  | Y  | Y  | Y  | X   |
+     | SER19-00352 | Y  | Y  | Y  | X   |
+     | SER19-00441 | Y  | Y  | Y  | X   |
+     | SER19-00442 | Y  | Y  | Y  | X   |
+     | SER19-00443 | Y  | Y  | Y  | X   |
+     | SER19-00453 | Y  | Y  | Y  | X   |
+
+
+
+
+     #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+     #+HEADER: :var outliers=outliers[,0]
+     #+begin_src shell
+comm -23 <(cut -f 1 2-full-mito/3-combine.fa.fai ) \
+    <(cut -f 1 2-full-mito/5-fixstart.fasta.fai) |
+    grep -v -f <(printf "%s\n" "${outliers[@]}" "${plasmic[@]}") |
+    grep -f - 2-full-mito/3-combine.fa.fai |
+    sort -k2,2n
+     #+end_src
+
+     #+RESULTS:
+     | SER11-1421  |  6104 | 1813029 | 60 | 61 |
+     | SER16-00070 |  6105 | 3030310 | 60 | 61 |
+     | SER11-0040  |  6109 | 1091617 | 60 | 61 |
+     | SER11-2252  |  6109 | 1902473 | 60 | 61 |
+     | SER11-2425  |  6110 | 1922929 | 60 | 61 |
+     | SER12-0271  |  6110 | 2185483 | 60 | 61 |
+     | SER12-0284  |  6366 | 2225884 | 60 | 61 |
+     | SER13-0641  |  6366 | 2547506 | 60 | 61 |
+     | SER13-0635  |  7007 | 2540370 | 60 | 61 |
+     | SER21-01282 |  8918 | 6971789 | 60 | 61 |
+     | SER12-0679  |  8920 | 2266546 | 60 | 61 |
+     | SER19-00132 |  8921 | 4038229 | 60 | 61 |
+     | SER12-0735  | 10454 | 2275627 | 60 | 61 |
+     | SER19-00351 | 10455 | 4081498 | 60 | 61 |
+     | SER11-2358  | 13987 | 1908696 | 60 | 61 |
+     | SER16-00048 | 14618 | 2947078 | 60 | 61 |
+     | SER11-1463  | 14619 | 1836333 | 60 | 61 |
+     | SER16-00473 | 14619 | 3224521 | 60 | 61 |
+     | SER19-00922 | 14619 | 5062163 | 60 | 61 |
+     | SER13-0409  | 14620 | 2474232 | 60 | 61 |
+     | SER17-00382 | 14620 | 3393216 | 60 | 61 |
+     | SER19-00895 | 14620 | 4790911 | 60 | 61 |
+     | SER11-0125  | 14621 | 1234570 | 60 | 61 |
+     | SER21-00940 | 14621 | 6666359 | 60 | 61 |
+     | SER19-00019 | 14622 | 3835352 | 60 | 61 |
+     | SER10-0106  | 14627 |  170909 | 60 | 61 |
+7) Check species
+
+  Blast consensus sequences against marine dolphins, mark any that map to
+  bottlenose
+
+  #+begin_src sh :tangle 2-medaka/2-check.sh
+ROOT=$(git rev-parse --show-toplevel)
+
+export BLAST_USAGE_REPORT=false
+
+$ROOT/apps/ncbi-blast-2.14.0+/bin/blastn \
+    -db $ROOT/0-ref/marine_dolphin.refseq.fasta \
+    -query $DIR/2-full-mito/4-all.fa \
+    -outfmt 6 \
+    -max_target_seqs 1
+    -max_hsps 1 \
+    -out $DIR/marine_dolphin.consensus.blast
+
+awk '$2 != "NC_012059.1"' $DIR/marine_dolphin.consensus.blast
+
+  #+end_src
+
+  #+RESULTS:
+  | SER18-00667 | NC_012051.1 | 99.378 | 16400 |  87 | 12 | 1 | 16399 | 1 | 16386 | 0.0 | 29706 |
+  | SER19-01079 | NC_019588.1 | 98.951 | 16400 | 152 | 16 | 1 | 16395 | 1 | 16385 | 0.0 | 29314 |
+
+  #+NAME: outliers
+  | Sample      | Species            |
+  |-------------+--------------------|
+  | SER18-00667 | Stenella attenuata |
+  | SER19-01079 | Feresa attenuata   |
+8) Combine bottlenose dolphin consensus sequences
+  #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+  #+HEADER: :var outliers=outliers[,0]
+  #+begin_src sh :tangle 2-full-mito/8-remove.sh
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/samtools-1.17/:$PATH
+DIR=$ROOT/3-assemble 
+all=$DIR/2-full-mito/5-fixstart.fasta
+
+rm $all.fai
+samtools faidx $all
+grep -v -f <(printf "%s\n" "${outliers[@]}" "${plasmic[@]}") $all.fai |
+    cut -f 1 |
+    samtools faidx -r - $all > $DIR/bottlenose.complete-mito.fa
+
+comm -23 <(cut -f 1 $DIR/2-full-mito/3-combine.fa.fai ) \
+    <(cut -f 1 $DIR/2-full-mito/5-fixstart.fasta.fai) |
+    grep -v -f <(printf "%s\n" "${outliers[@]}" "${plasmic[@]}") |
+    samtools faidx -r - $DIR/2-full-mito/3-combine.fa |
+    cat $DIR/bottlenose.complete-mito.fa - \
+        > $DIR/bottlenose.mito.fa
+
+    
+  #+end_src
+
+#+begin_src shell
+ROOT=$(git rev-parse --show-toplevel)
+PATH=$ROOT/apps/samtools-1.17/:$PATH
+DIR=$ROOT/3-assemble
+
+file=$(mktemp)
+tar -Oxf $DIR/2-full-mito/1-medaka/SER12-0678.tar \
+    consensus.fasta > $file
+samtools faidx $file P6_0 |
+    sed 's/>.*/>SER12-0678/' >> $DIR/bottlenose.mito.fa
+
+rm $file.fai $file
+
+#+end_src
+
+#+RESULTS:
+
+  #+begin_src shell
+grep '>' -c $DIR/bottlenose.*mito.fa |
+    sed -e 's#.*/##' -e 's/:/\t/'
+  #+end_src
+
+  #+RESULTS:
+  | bottlenose.complete-mito.fa | 386 |
+  | bottlenose.full-mito.fa     | 408 |
+  | bottlenose.mito.fa          | 413 |
+
+* mtCR
+
+Reduce consensus sequence to mtCR using the following primers
+| Name   | Sequence                   |
+|--------+----------------------------|
+| L15824 | 5’-CCTCACTCCTCCCTAAGACT-3’ |
+| H16265 | 5’-GCCCGGTGCGAGAAGAGG-3’   |
+| H16498 | 5’-CCTGAAGTAAGAACCAGATG-3’ |
+
+#+begin_src shell :results verbatim
+ROOT=$(git rev-parse --show-toplevel)
+DIR=$ROOT/3-assemble
+~/.local/bin/cutadapt \
+    -g 'CCTCACTCCTCCCTAAGACT...CCTCTTCTCGCACCGGGC' \
+    -g 'CCTCACTCCTCCCTAAGACT' \
+    --trim-n \
+    --length 1500 \
+    --untrimmed-output $DIR/mtCR-untrimmed.fa \
+    -o $DIR/mtCR.fa \
+    $DIR/bottlenose.mito.fa |&
+fold -w 60
+#+end_src
+
+#+RESULTS:
+#+begin_example
+This is cutadapt 4.9 with Python 3.10.8
+Command line parameters: -g CCTCACTCCTCCCTAAGACT...CCTCTTCTC
+GCACCGGGC -g CCTCACTCCTCCCTAAGACT --trim-n --length 1500 --u
+ntrimmed-output /home/maa146/Projects/dolphin/new-repo/3-ass
+emble/mtCR-untrimmed.fa -o /home/maa146/Projects/dolphin/new
+-repo/3-assemble/mtCR.fa /home/maa146/Projects/dolphin/new-r
+epo/3-assemble/bottlenose.mito.fa
+Processing single-end reads on 1 core ...
+Finished in 0.344 s (832.669 µs/read; 0.07 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:                     413
+Reads with adapters:                       403 (97.6%)
+Reads written (passing filters):           403 (97.6%)
+
+Total basepairs processed:     6,612,215 bp
+Total written (filtered):        174,063 bp (2.6%)
+
+=== Adapter 1 ===
+
+Sequence: CCTCACTCCTCCCTAAGACT...CCTCTTCTCGCACCGGGC; Type: l
+inked; Length: 20+18; 5' trimmed: 397 times; 3' trimmed: 397
+ times
+
+Minimum overlap: 3+3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20 bp: 2
+
+No. of allowed errors:
+1-9 bp: 0; 10-18 bp: 1
+
+Overview of removed sequences at 5' end
+length	count	expect	max.err	error counts
+8498	1	0.0	2	0 0 1
+8499	4	0.0	2	0 0 4
+8500	3	0.0	2	0 0 3
+8501	2	0.0	2	0 0 2
+8505	1	0.0	2	0 0 1
+15404	1	0.0	2	0 0 1
+15405	62	0.0	2	0 0 62
+15406	141	0.0	2	0 0 141
+15407	92	0.0	2	0 0 92
+15408	21	0.0	2	0 0 21
+15409	19	0.0	2	0 0 19
+15410	22	0.0	2	0 0 22
+15411	11	0.0	2	0 0 11
+15412	5	0.0	2	0 0 5
+15413	6	0.0	2	0 0 6
+15414	2	0.0	2	0 0 2
+15415	2	0.0	2	0 0 2
+15417	1	0.0	2	0 0 1
+15420	1	0.0	2	0 0 1
+
+
+
+Overview of removed sequences at 3' end
+length	count	expect	max.err	error counts
+551	53	0.0	1	53
+552	291	0.0	1	291
+553	27	0.0	1	27
+554	12	0.0	1	12
+555	3	0.0	1	3
+5688	7	0.0	1	7
+5689	4	0.0	1	4
+
+
+=== Adapter 2 ===
+
+Sequence: CCTCACTCCTCCCTAAGACT; Type: regular 5'; Length: 20
+; Trimmed: 6 times
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20 bp: 2
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+5945	2	0.0	2	0 0 2
+5946	1	0.0	2	0 0 1
+8498	1	0.0	2	0 0 1
+8499	1	0.0	2	0 0 1
+8500	1	0.0	2	0 0 1
+#+end_example
+
+#+begin_src shell 
+grep '>' -c  $DIR/mtCR.fa 
+#+end_src
+
+#+RESULTS:
+: 403
+
+
+   - Samples w/o alignment
+    #+HEADER: :var data=../2-samples/data.ser.org:partial
+    #+begin_src shell :colnames '("Sample" "P4" "P6" "P7" "P10") :tangle tmp.sh
+ROOT=$(git rev-parse --show-toplevel)
+
+sed -n 's/>//p' $DIR/mtCR-untrimmed.fa |
+    while read name; do
+        printf "$name"
+        printf "\t%c"  ${data[$name]}
+        printf "\n"
+        done
+  #+end_src
+
+  #+RESULTS:
+  | Sample      | P4 | P6 | P7 | P10 |
+  |-------------+----+----+----+-----|
+  | SER11-0040  | X  | X  | X  | Y   |
+  | SER11-1421  | X  | X  | Y  | X   |
+  | SER11-2252  | X  | X  | X  | Y   |
+  | SER11-2358  | Y  | X  | Y  | Y   |
+  | SER11-2425  | X  | X  | X  | Y   |
+  | SER12-0271  | X  | X  | X  | Y   |
+  | SER12-0735  | Y  | X  | Y  | X   |
+  | SER13-0635  | Y  | X  | X  | X   |
+  | SER16-00070 | X  | X  | Y  | X   |
+  | SER19-00351 | Y  | X  | Y  | X   |
+
+   - Lengths of mtCR sequences
+   #+begin_src shell
+ROOT=$(git rev-parse --show-toplevel)
+
+grep -v '>' $ROOT/3-assemble/mtCR.fa |
+    awk '{_[length]++} END {for( i in _) print i, _[i];}' OFS="\t"
+    #+end_src
+
+    #+RESULTS:
+    | 420 |   1 |
+    | 421 |   4 |
+    | 431 |   2 |
+    | 432 | 359 |
+    | 433 |  36 |
+
