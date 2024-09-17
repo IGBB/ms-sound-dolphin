@@ -1,0 +1,13 @@
+0-complete-mito-with-outgroup.fa
+1-mafft.fasta
+2-haplotypes.full.fa
+2-haplotypes.with_outgroup.fasta
+2-haplotypes.without_outgroup.fasta
+3-structure-haplotype.geno
+3-structure-haplotype.lfmm
+haplotype-nj-tree.pdf
+haplotype-nj-tree.png
+3-structure-haplotype.pca
+3-structure-haplotype.pcaProject
+3-structure-haplotype.snmf
+3-structure-haplotype.snmfProject

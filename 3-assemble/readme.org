@@ -168,6 +168,7 @@ tar --transform="s#^./##" \
     -cf $DIR/2-full-mito/1-medaka/$name.tar .
 
   #+end_src
+
 2) Assemble consensus amplicons with CAP3
   #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
   #+begin_src shell :tangle 2-full-mito/2-cap3/run.sh
@@ -220,6 +221,7 @@ for name in "${!data[@]}"; do
         --remove-files --transform='s#^./##' .
 done
   #+END_SRC
+
 3) Combine consensus sequences
   #+HEADER: :var data=../2-samples/data.ser.org:data[,0]
   #+begin_src shell :tangle 2-full-mito/3-combine.sh
@@ -260,6 +262,7 @@ awk 'NR > 1 { print $2 }' $ROOT/2-samples/2-coverage.tbl |
   | Sample     | P4 | P6 | P7 | P10 |
   |------------+----+----+----+-----|
   | SER12-0678 | Y  | Y  | X  | X   |
+
 4) Trim overlapping regions 
 
    #+begin_src tmux :session dolphin:local
@@ -287,6 +290,7 @@ rm $DIR/2-full-mito/4-rotated.fa.fai
 samtools faidx $DIR/2-full-mito/4-rotated.fa
 
    #+end_src
+
 5) fixstart 
 
   #+begin_src tmux :session dolphin:local
@@ -305,6 +309,7 @@ singularity exec -B $ROOT $ROOT/apps/circlator_1.5.5.sif \
 rm  $DIR/2-full-mito/5-fixstart.fasta.fai
 samtools faidx $DIR/2-full-mito/5-fixstart.fasta
   #+end_src
+
 6) Length stats
      #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
      #+HEADER: :var outliers=outliers[,0]
@@ -355,9 +360,6 @@ grep -v -f <(printf "%s\n" "${outliers[@]}" "${plasmic[@]}") \
      | SER19-00443 | Y  | Y  | Y  | X   |
      | SER19-00453 | Y  | Y  | Y  | X   |
 
-
-
-
      #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
      #+HEADER: :var outliers=outliers[,0]
      #+begin_src shell
@@ -395,6 +397,7 @@ comm -23 <(cut -f 1 2-full-mito/3-combine.fa.fai ) \
      | SER21-00940 | 14621 | 6666359 | 60 | 61 |
      | SER19-00019 | 14622 | 3835352 | 60 | 61 |
      | SER10-0106  | 14627 |  170909 | 60 | 61 |
+
 7) Check species
 
   Blast consensus sequences against marine dolphins, mark any that map to
@@ -426,6 +429,7 @@ awk '$2 != "NC_012059.1"' $DIR/marine_dolphin.consensus.blast
   |-------------+--------------------|
   | SER18-00667 | Stenella attenuata |
   | SER19-01079 | Feresa attenuata   |
+
 8) Combine bottlenose dolphin consensus sequences
   #+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
   #+HEADER: :var outliers=outliers[,0]
@@ -480,6 +484,58 @@ grep '>' -c $DIR/bottlenose.*mito.fa |
 
 * mtCR
 
+- Samples w/o P6
+    #+header: :var data=../2-samples/data.ser.org:partial
+    #+header: :colnames '("Sample")
+    #+begin_src shell :tangle tmp.sh
+ROOT=$(git rev-parse --show-toplevel)
+
+for name in ${!data[@]}; do
+    readarray -t pairs <<< "${data[$name]}"
+    [ "${pairs[1]}" == "X" ] && echo $name
+done
+  #+end_src
+
+  #+RESULTS:
+  #+name: noamp
+  | Sample      |
+  |-------------|
+  | SER11-0040  |
+  | SER11-2358  |
+  | SER11-2425  |
+  | SER12-0271  |
+  | SER11-2252  |
+  | SER12-0735  |
+  | SER11-1421  |
+  | SER19-00351 |
+  | SER13-0635  |
+  | SER16-00070 |
+
+
+
+#+HEADER: :var noamp=noamp[,0]
+#+HEADER: :var plasmic=heteroplasmic-samples[2:5,0]
+#+HEADER: :var outliers=outliers[,0]
+#+HEADER: :var data=../2-samples/data.ser.org:data[,0]
+#+begin_src shell :tangle tmp.sh :results output
+## FILTER outliers and heteroplasmic data
+declare -A delk
+for del in "${plasmic[@]}" "${outliers[@]}" "${noamp[@]}"; do
+    delk[$del]=1 ;
+done
+
+for name in "${data[@]}"; do
+    [ "${delk[$name]-}" ] && continue
+    tar -Oxf $DIR/2-full-mito/1-medaka/$name.tar \
+         consensus.fasta |
+         awk '$1~/^P6/ { $1 = ">" name; print}' name="$name" \
+             RS=">" FS="\n" OFS="\n"
+done > $DIR/bottlenose.P6.fa
+
+#+end_src
+
+#+RESULTS:
+
 Reduce consensus sequence to mtCR using the following primers
 | Name   | Sequence                   |
 |--------+----------------------------|
@@ -491,89 +547,39 @@ Reduce consensus sequence to mtCR using the following primers
 ROOT=$(git rev-parse --show-toplevel)
 DIR=$ROOT/3-assemble
 ~/.local/bin/cutadapt \
-    -g 'CCTCACTCCTCCCTAAGACT...CCTCTTCTCGCACCGGGC' \
     -g 'CCTCACTCCTCCCTAAGACT' \
     --trim-n \
     --length 1500 \
     --untrimmed-output $DIR/mtCR-untrimmed.fa \
     -o $DIR/mtCR.fa \
-    $DIR/bottlenose.mito.fa |&
+    $DIR/bottlenose.P6.fa |&
 fold -w 60
 #+end_src
 
 #+RESULTS:
 #+begin_example
 This is cutadapt 4.9 with Python 3.10.8
-Command line parameters: -g CCTCACTCCTCCCTAAGACT...CCTCTTCTC
-GCACCGGGC -g CCTCACTCCTCCCTAAGACT --trim-n --length 1500 --u
-ntrimmed-output /home/maa146/Projects/dolphin/new-repo/3-ass
-emble/mtCR-untrimmed.fa -o /home/maa146/Projects/dolphin/new
--repo/3-assemble/mtCR.fa /home/maa146/Projects/dolphin/new-r
-epo/3-assemble/bottlenose.mito.fa
+Command line parameters: -g CCTCACTCCTCCCTAAGACT --trim-n --
+length 1500 --untrimmed-output /home/maa146/Projects/dolphin
+/new-repo/3-assemble/mtCR-untrimmed.fa -o /home/maa146/Proje
+cts/dolphin/new-repo/3-assemble/mtCR.fa /home/maa146/Project
+s/dolphin/new-repo/3-assemble/bottlenose.P6.fa
 Processing single-end reads on 1 core ...
-Finished in 0.344 s (832.669 µs/read; 0.07 M reads/minute).
+Finished in 0.072 s (178.074 µs/read; 0.34 M reads/minute).
 
 === Summary ===
 
-Total reads processed:                     413
-Reads with adapters:                       403 (97.6%)
-Reads written (passing filters):           403 (97.6%)
+Total reads processed:                     403
+Reads with adapters:                       403 (100.0%)
+Reads written (passing filters):           403 (100.0%)
 
-Total basepairs processed:     6,612,215 bp
-Total written (filtered):        174,063 bp (2.6%)
+Total basepairs processed:     2,566,187 bp
+Total written (filtered):        169,696 bp (6.6%)
 
 === Adapter 1 ===
 
-Sequence: CCTCACTCCTCCCTAAGACT...CCTCTTCTCGCACCGGGC; Type: l
-inked; Length: 20+18; 5' trimmed: 397 times; 3' trimmed: 397
- times
-
-Minimum overlap: 3+3
-No. of allowed errors:
-1-9 bp: 0; 10-19 bp: 1; 20 bp: 2
-
-No. of allowed errors:
-1-9 bp: 0; 10-18 bp: 1
-
-Overview of removed sequences at 5' end
-length	count	expect	max.err	error counts
-8498	1	0.0	2	0 0 1
-8499	4	0.0	2	0 0 4
-8500	3	0.0	2	0 0 3
-8501	2	0.0	2	0 0 2
-8505	1	0.0	2	0 0 1
-15404	1	0.0	2	0 0 1
-15405	62	0.0	2	0 0 62
-15406	141	0.0	2	0 0 141
-15407	92	0.0	2	0 0 92
-15408	21	0.0	2	0 0 21
-15409	19	0.0	2	0 0 19
-15410	22	0.0	2	0 0 22
-15411	11	0.0	2	0 0 11
-15412	5	0.0	2	0 0 5
-15413	6	0.0	2	0 0 6
-15414	2	0.0	2	0 0 2
-15415	2	0.0	2	0 0 2
-15417	1	0.0	2	0 0 1
-15420	1	0.0	2	0 0 1
-
-
-
-Overview of removed sequences at 3' end
-length	count	expect	max.err	error counts
-551	53	0.0	1	53
-552	291	0.0	1	291
-553	27	0.0	1	27
-554	12	0.0	1	12
-555	3	0.0	1	3
-5688	7	0.0	1	7
-5689	4	0.0	1	4
-
-
-=== Adapter 2 ===
-
 Sequence: CCTCACTCCTCCCTAAGACT; Type: regular 5'; Length: 20
-; Trimmed: 6 times
+; Trimmed: 403 times
 
 Minimum overlap: 3
 No. of allowed errors:
@@ -581,11 +587,15 @@ No. of allowed errors:
 
 Overview of removed sequences
 length	count	expect	max.err	error counts
-5945	2	0.0	2	0 0 2
-5946	1	0.0	2	0 0 1
-8498	1	0.0	2	0 0 1
-8499	1	0.0	2	0 0 1
-8500	1	0.0	2	0 0 1
+5945	7	0.0	2	0 0 7
+5946	209	0.0	2	0 0 209
+5947	145	0.0	2	0 0 145
+5948	26	0.0	2	0 0 26
+5949	10	0.0	2	0 0 10
+5950	2	0.0	2	0 0 2
+5951	2	0.0	2	0 0 2
+5953	1	0.0	2	0 0 1
+5954	1	0.0	2	0 0 1
 #+end_example
 
 #+begin_src shell 
@@ -596,33 +606,6 @@ grep '>' -c  $DIR/mtCR.fa
 : 403
 
 
-   - Samples w/o alignment
-    #+HEADER: :var data=../2-samples/data.ser.org:partial
-    #+begin_src shell :colnames '("Sample" "P4" "P6" "P7" "P10") :tangle tmp.sh
-ROOT=$(git rev-parse --show-toplevel)
-
-sed -n 's/>//p' $DIR/mtCR-untrimmed.fa |
-    while read name; do
-        printf "$name"
-        printf "\t%c"  ${data[$name]}
-        printf "\n"
-        done
-  #+end_src
-
-  #+RESULTS:
-  | Sample      | P4 | P6 | P7 | P10 |
-  |-------------+----+----+----+-----|
-  | SER11-0040  | X  | X  | X  | Y   |
-  | SER11-1421  | X  | X  | Y  | X   |
-  | SER11-2252  | X  | X  | X  | Y   |
-  | SER11-2358  | Y  | X  | Y  | Y   |
-  | SER11-2425  | X  | X  | X  | Y   |
-  | SER12-0271  | X  | X  | X  | Y   |
-  | SER12-0735  | Y  | X  | Y  | X   |
-  | SER13-0635  | Y  | X  | X  | X   |
-  | SER16-00070 | X  | X  | Y  | X   |
-  | SER19-00351 | Y  | X  | Y  | X   |
-
    - Lengths of mtCR sequences
    #+begin_src shell
 ROOT=$(git rev-parse --show-toplevel)
@@ -632,9 +615,7 @@ grep -v '>' $ROOT/3-assemble/mtCR.fa |
     #+end_src
 
     #+RESULTS:
-    | 420 |   1 |
-    | 421 |   4 |
-    | 431 |   2 |
-    | 432 | 359 |
-    | 433 |  36 |
-
+    | 419 |   1 |
+    | 420 |   2 |
+    | 421 | 363 |
+    | 422 |  37 |

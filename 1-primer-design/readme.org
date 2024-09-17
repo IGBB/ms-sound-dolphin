@@ -184,18 +184,30 @@ print $json->encode( $primers );
 | P10  | T    |  6906 | 13015 |
 
 #+header: :results output file graphics :file primer-locations.png
-#+header: :width 8 :height 6 :units in :res 600
-#+begin_src R :var locs=pair-locations
+#+header: :width 8 :height 6 :units in :res 600 :bg white
+#+begin_src R :var locs=pair-locations :session primer
 library(tidyverse)
+library(scales)
+library(ggtext)
 
 colnames(locs) <- c('Pair', 'used', 'Start', 'End')
 
 locs <- locs %>%
   arrange(, Pair) %>%
-  mutate(pos = (Start+End) / 2, Pair = factor(Pair, levels = paste0('P', 1:10))) %>%
+  mutate(pos = (Start+End) / 2,
+         Pair = factor(Pair, levels = paste0('P', 1:10))) %>%
   mutate(level = as.numeric(Pair)) %>%
   mutate(ymin=level,
          ymax=level + as.numeric(used)*0.25 + 0.5)
+
+locs$Pair <- select(locs, Pair, used) %>%
+  unique %>%
+  pull(used, name=Pair) %>%
+  ifelse(.,
+         sprintf("**%s**", names(.)),
+         names(.)) %>%
+  setNames(names(.), .) %>%
+  fct_recode(locs$Pair, !!!.)
 
 #colorbrewer pastel for primers not used
 #colorbrewer set1 for primers used
@@ -206,24 +218,26 @@ cols <- c(
   "P5" = "#f4cae4dd",
   "P8" = "#e6f5c9dd",
   "P9" = "#fff2aedd",
-  "P4" = "#e41a1cff",
-  "P6" = "#377eb8ff",
-  "P7" = "#4daf4aff",
-  "P10"= "#984ea3ff"
+  "**P4**" = "#e41a1cff",
+  "**P6**" = "#377eb8ff",
+  "**P7**" = "#4daf4aff",
+  "**P10**"= "#984ea3ff"
 )
 
 label <- function(x){
-  l <- ifelse(x ==1 , "1/16.3Kbp", scales::label_number_si(unit='bp')(x))
+  l <- ifelse(x ==1 , "1/16.3Kbp",
+              label_number(scale_cut=cut_si('bp'))(x))
   str(l)
   return(l)
 }
 
 ggplot(locs,
-       aes(xmax=Start,     xmin=End,
+       aes(xmax=Start, xmin=End,
            ymax=ymax, ymin=level,
            fill=Pair )) +
-  annotate(geom='rect', xmin=1, xmax=Inf, ymin=-Inf, ymax = 0 , fill='white')+
-  geom_rect() +
+  annotate(geom='rect', xmin=1, xmax=Inf,
+           ymin=-Inf, ymax = 0 , fill='white') +
+   geom_rect() +
   scale_y_continuous(limits = c(-15, 11), expand = c(0,0)) +
   scale_fill_manual(values=cols)+
   scale_alpha_manual(values=c(0.28, 1)) +
@@ -232,15 +246,11 @@ ggplot(locs,
     labels=label) +
   coord_polar(clip='off') +
   theme_minimal() +
-  theme(plot.background = element_rect(fill='white', color = NA),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
-
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.text=element_markdown())
 
 #+end_src
 
 #+RESULTS:
 [[file:primer-locations.png]]
-
-#+ATTR_ORG: :width 1000
-[[primer-locations.png]]

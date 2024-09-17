@@ -1,7 +1,0 @@
-1-medaka/SER*/
-1-medaka/run.sh
-1-medaka/1-combine.sh
-2-clair3/1-call-amplicon-diploid/
-2-clair3/2-call-amplicon-haploid/
-2-clair3/3-merge-diploid.sh
-2-clair3/3-merge.sh

@@ -1,0 +1,3159 @@
+#+title: Whole mitogenome analysis
+#+PROPERTY:  header-args :var DIR=(file-name-directory buffer-file-name)
+
+* Complete Mitogenomes
+ :PROPERTIES:
+:header-args:R: :session full-mito :results output verbatim
+:END:
+
+** Align
+   #+begin_src tmux :session dolphin:local
+ROOT=$(git rev-parse --show-toplevel)
+DIR=$ROOT/5-full-mito/
+
+cat $ROOT/0-ref/stenella.frontalis.complete-mito.fa \
+    $ROOT/3-assemble/bottlenose.complete-mito.fa \
+    > $DIR/0-complete-mito-with-outgroup.fa
+$ROOT/apps/mafft-7.520/mafft.bat --auto --thread 4  \
+    $DIR/0-complete-mito-with-outgroup.fa  \
+    > $DIR/1-mafft-with-outgroup.fasta
+   #+end_src
+
+** Load libraries
+#+begin_src R :results silent
+library(adegenet)
+library(pegas)
+library(LEA)
+library(tidyverse)
+library(ape)
+library(tidytree)
+library(ggtree)
+library(Biostrings)
+library(maps)
+library(ggsankey)
+library(ggrepel)
+library(hues)
+library(ascii)
+op <- options(asciiType = "org")
+
+library(aplot)
+options(width = 65)
+
+library(hierfstat)
+library(poppr)
+library(haplotypes)
+#+end_src
+
+#+begin_src R
+sessionInfo()
+#+end_src
+
+#+RESULTS:
+#+begin_example
+R version 4.2.2 (2022-10-31)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Rocky Linux 9.1 (Blue Onyx)
+
+Matrix products: default
+BLAS:   /apps/spack-managed/gcc-11.3.1/r-4.2.2-34ublnqh75jvi4k4dfkvbfrz2ivdmfvm/rlib/R/lib/libRblas.so
+LAPACK: /apps/spack-managed/gcc-11.3.1/r-4.2.2-34ublnqh75jvi4k4dfkvbfrz2ivdmfvm/rlib/R/lib/libRlapack.so
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+
+attached base packages:
+[1] stats4    stats     graphics  grDevices utils     datasets
+[7] methods   base
+
+other attached packages:
+ [1] cowplot_1.1.1       treemapify_2.5.6    haplotypes_1.1.3.1
+ [4] poppr_2.9.6         hierfstat_0.5-11    aplot_0.2.1
+ [7] ascii_2.4           hues_0.2.0          ggrepel_0.9.3
+[10] ggsankey_0.0.99999  maps_3.4.2          Biostrings_2.66.0
+[13] GenomeInfoDb_1.34.9 XVector_0.38.0      IRanges_2.32.0
+[16] S4Vectors_0.36.2    BiocGenerics_0.44.0 ggtree_3.6.2
+[19] tidytree_0.4.5      lubridate_1.9.2     forcats_1.0.0
+[22] stringr_1.5.1       dplyr_1.1.4         purrr_1.0.2
+[25] readr_2.1.4         tidyr_1.3.1         tibble_3.2.1
+[28] ggplot2_3.5.1.9000  tidyverse_2.0.0     LEA_3.10.2
+[31] pegas_1.3           ape_5.7-1           adegenet_2.1.10
+[34] ade4_1.7-22
+
+loaded via a namespace (and not attached):
+ [1] colorspace_2.1-0       seqinr_4.2-36
+ [3] ellipsis_0.3.2         fs_1.6.3
+ [5] farver_2.1.2           ggfittext_0.10.2
+ [7] fansi_1.0.6            codetools_0.2-19
+ [9] splines_4.2.2          cachem_1.0.8
+[11] jsonlite_1.8.7         cluster_2.1.6
+[13] shiny_1.7.5.1          compiler_4.2.2
+[15] Matrix_1.6-1.1         fastmap_1.1.1
+[17] lazyeval_0.2.2         cli_3.6.2
+[19] later_1.3.1            htmltools_0.5.6
+[21] tools_4.2.2            igraph_2.0.3
+[23] coda_0.19-4.1          gtable_0.3.5
+[25] glue_1.7.0             GenomeInfoDbData_1.2.9
+[27] reshape2_1.4.4         fastmatch_1.1-4
+[29] Rcpp_1.0.11            statnet.common_4.9.0
+[31] vctrs_0.6.5            nlme_3.1-163
+[33] network_1.18.2         timechange_0.2.0
+[35] mime_0.12              lifecycle_1.0.4
+[37] phangorn_2.11.1        zlibbioc_1.44.0
+[39] MASS_7.3-60            scales_1.3.0
+[41] hms_1.1.3              promises_1.2.1
+[43] parallel_4.2.2         RColorBrewer_1.1-3
+[45] memoise_2.0.1          ggfun_0.1.3
+[47] yulab.utils_0.1.0      stringi_1.8.4
+[49] plotrix_3.8-4          permute_0.9-7
+[51] boot_1.3-30            rlang_1.1.3
+[53] pkgconfig_2.0.3        bitops_1.0-7
+[55] polysat_1.7-7          lattice_0.21-8
+[57] treeio_1.22.0          patchwork_1.2.0.9000
+[59] labeling_0.4.3         tidyselect_1.2.1
+[61] plyr_1.8.8             magrittr_2.0.3
+[63] R6_2.5.1               generics_0.1.3
+[65] sna_2.7-2              pillar_1.9.0
+[67] withr_3.0.0            mgcv_1.9-0
+[69] survival_3.5-7         RCurl_1.98-1.12
+[71] crayon_1.5.2           utf8_1.2.4
+[73] tzdb_0.4.0             grid_4.2.2
+[75] data.table_1.14.8      vegan_2.6-6.1
+[77] digest_0.6.33          xtable_1.8-4
+[79] httpuv_1.6.12          gridGraphics_0.5-1
+[81] munsell_0.5.1          viridisLite_0.4.2
+[83] ggplotify_0.1.2        tcltk_4.2.2
+[85] quadprog_1.5-8
+#+end_example
+** Load mtCR haplotype memberships
+#+begin_src R
+mtCR.hap.membership <-
+  read.delim("../4-mtCR/4-struct-membership.hap-fixed.txt")
+#+end_src
+
+#+RESULTS:
+
+** Load alignments
+#+begin_src R
+fasta.full <- read.dna("1-mafft-with-outgroup.fasta",
+                       format='fasta', as.matrix=T)
+fasta.full
+#+end_src
+
+#+RESULTS:
+#+begin_example
+387 DNA sequences in binary format stored in a matrix.
+
+All sequences of same length: 16508 
+
+Labels:
+NC_060612.1 Stenella frontalis isolate SRR16086847 mitochond...
+SER10-0003
+SER10-0036
+SER10-0037
+SER10-0065
+SER10-0066
+...
+
+Base composition:
+    a     c     g     t 
+0.329 0.261 0.128 0.282 
+(Total: 6.39 Mb)
+#+end_example
+
+#+HEADER: :results output graphics file :file alignment.png
+#+HEADER: :width 2000 :height 3000 :bg white
+#+begin_src R
+image.DNAbin(fasta.full)
+#+end_src
+
+#+RESULTS:
+[[file:alignment.png]]
+** Haplotypes
+#+begin_src R :results silent
+haplotypes.full <- as.dna(fasta.full ) %>%
+  haplotype(indel='missing')
+#+end_src
+
+Rename haplotypes "mito.###" and sorting by size
+#+begin_src R :results silent
+haplotypes.new_names <- haplotypes.full@haplist %>%
+  lapply(as.data.frame) %>%
+  bind_rows(.id='name') %>%
+  setNames(c("Haplotype", "Sample")) %>%
+  group_by(Haplotype) %>%
+  mutate(Out = any(grepl("NC_060612.1", Sample))) %>%
+  mutate(NewName = ifelse(Out, "outgroup", "mito"),
+         Size=n()) %>%
+  select(Haplotype, NewName, Size) %>%
+  unique() %>%
+  rowid_to_column("tmp") %>%
+  arrange(desc(Size)) %>%
+  group_by(NewName) %>%
+  mutate(NewName = sprintf("%s-%03d", NewName, row_number())) %>%
+  arrange(tmp) %>%
+  select(-tmp)
+
+names(haplotypes.full@hapind) <- haplotypes.new_names$NewName
+names(haplotypes.full@haplist) <- haplotypes.new_names$NewName
+rownames(haplotypes.full@sequence) <- haplotypes.new_names$NewName
+#+end_src
+
+Write fasta
+#+begin_src R :results silent
+haplotypes.full@sequence %>%
+  as.DNAbin %>%
+  write.FASTA("2-haplotypes.with_outgroup.fasta")
+
+haplotypes.full@sequence[
+  !grepl("outgroup", names(haplotypes.full@haplist)),
+  ] %>%
+  as.DNAbin %>%
+  write.FASTA("2-haplotypes.without_outgroup.fasta")
+#+end_src
+
+
+
+Size distribution
+#+begin_src R :results value table :colnames yes
+haplotypes.full@freq %>%
+  setNames(names(haplotypes.full@haplist)) %>%
+  as.data.frame(nm="Freq")%>%
+  rownames_to_column("Group") %>%
+  mutate(Group = sub("-[0-9]*$", "", Group),
+         Freq = as.character(Freq)) %>%
+  group_by(Group, Freq) %>%
+  count(name="Count") %>%
+  arrange(as.numeric(Freq)) %>%
+  rbind(., data.frame(Group = "Total",
+                      Freq  = "",
+                      Count=sum(.$Count)))
+#+end_src
+
+#+RESULTS:
+| Group    | Freq | Count |
+|----------+------+-------|
+| outgroup |    1 |     1 |
+| mito     |    1 |    84 |
+| mito     |    2 |    10 |
+| mito     |    3 |     4 |
+| mito     |    4 |     3 |
+| mito     |    6 |     4 |
+| mito     |    7 |     2 |
+| mito     |    8 |     3 |
+| mito     |    9 |     1 |
+| mito     |   10 |     1 |
+| mito     |   13 |     1 |
+| mito     |   22 |     1 |
+| mito     |   30 |     1 |
+| mito     |   31 |     1 |
+| mito     |   81 |     1 |
+|----------+------+-------|
+| Total    |      |   118 |
+
+
+Plot pie chart
+#+HEADER: :results output graphics file
+#+HEADER: :file haplotype.pie.png
+#+HEADER: :width 800 :height 600 :bg white
+#+begin_src R
+haplotypes.full@freq %>%
+  as.data.frame(nm='Size') %>%
+  group_by(Size) %>%
+  count %>%
+  ggplot(aes(x=1, n, fill=factor(Size))) +
+  geom_col() +
+  coord_polar(theta = 'y', direction = -1) +
+  scale_fill_iwanthue() +
+  theme_minimal() +
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank())
+
+
+#+end_src
+
+#+RESULTS:
+[[file:haplotype.pie.png]]
+
+Sankey plot showing the change in haplotypes between mtCR and full mito
+#+header: :results output graphics file
+#+header: :file mtCR-vs-whole-sankey.png
+#+header: :width 8 :height 16 :units in :res 100 :bg white
+#+begin_src R
+hap.compare.data <- haplotypes.full@haplist %>%
+  lapply(as.data.frame) %>%
+  bind_rows(.id='name') %>%
+  setNames(c("Hap.full", "Acc")) %>%
+  mutate(Acc = sub(" .*", "", Acc)) %>%
+  inner_join(mtCR.hap.membership) %>%
+  select("Hap.mtCR"="ID", "Hap.full") %>%
+  group_by(Hap.full) %>%
+  mutate(full.n=n()) %>%
+  group_by(Hap.mtCR) %>%
+  mutate(mtcr.n=n()) %>%
+  ungroup() %>%
+  arrange(desc(mtcr.n), Hap.mtCR, desc(full.n)) %>%  
+  mutate(Hap.full = fct_inorder(Hap.full),
+         Hap.mtCR = fct_inorder(Hap.mtCR))
+
+make_long(hap.compare.data, Hap.mtCR, Hap.full) %>%
+  mutate(node = factor(node,
+                       levels(fct_c(hap.compare.data$Hap.mtCR,
+                                    hap.compare.data$Hap.full))),
+         next_node=factor(next_node,
+                          levels(fct_c(hap.compare.data$Hap.mtCR,
+                                hap.compare.data$Hap.full))),
+         x = factor(x, c("Hap.mtCR", "Hap.full"),
+                    c("mtCR\nHaplotypes",
+                      "Whole Mitogenome\nHaplotypes"))) %>%
+  group_by(node) %>%
+  mutate(label=ifelse(n() >= 3, as.character(node), NA)) %>%
+  ggplot(aes(x = x, next_x = next_x, node = node,
+             next_node = next_node, fill = fct_shuffle(node),
+             label = label)) +
+  geom_sankey(flow.alpha = .6,
+              node.color = "gray30") +
+  geom_sankey_label(size = 3, color = "white", fill = "gray40") +
+  scale_fill_viridis_d(drop = FALSE) +
+  theme_sankey(base_size = 18) +
+  labs(x = NULL) +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = .5)) +
+  ggtitle("mtCR vs Whole Mitogenome Haplotype Change")
+#+end_src
+
+#+RESULTS:
+[[file:mtCR-vs-whole-sankey.png]]
+
+
+Haplotype distance matrix
+#+header: :results output graphics file
+#+header: :file haplotype-distance.png
+#+header: :width 17 :height 16 :units in :res 100 :bg white
+#+begin_src R
+
+haplotypes.full.dist <- haplotypes.full@sequence %>%
+  as.DNAbin %>%
+  dist.dna(model = "N", pairwise.deletion = T)
+
+haplotypes.full.dist.order <-
+  hclust(haplotypes.fill.dist)[c("labels", "order")] %>%
+  bind_cols %>%
+  mutate(new = labels[order]) %>%
+  pull(new) %>%
+  rev
+
+haplotypes.fill.dist %>%
+  as.matrix %>%
+  as.data.frame %>%
+  rownames_to_column("Hap1") %>%
+  gather(-Hap1, key="Hap2", value="dist") %>%
+  mutate(Hap1 = factor(Hap1, haplotypes.full.dist.order),
+         Hap2 = factor(Hap2, haplotypes.full.dist.order)) %>%
+  filter(!Hap1 %in% c("outgroup-001")) %>%
+  filter(!Hap2 %in% c("outgroup-001")) %>%
+  ggplot(aes(Hap1, Hap2, fill=dist)) +
+  scale_x_discrete(name="Haplotype") +
+  scale_y_discrete(name="Haplotype") +
+  scale_fill_gradient(low="grey30", high="white",
+                      limits=c(0,20), na.value="white",
+                      name="Distance") +
+  geom_tile() +
+  coord_equal() +
+  ggtitle("Haplotype Sequence Distance") +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(angle=  90, hjust=0.5, vjust=0.5))
+#+end_src
+
+#+RESULTS:
+[[file:haplotype-distance.png]]
+
+** Structure (Haplotype)
+
+1) Load haplotypes into =genlight= object
+  #+begin_src R
+snps.whole.hap <- fasta2genlight(
+  "2-haplotypes.without_outgroup.fasta",
+  quiet = T,
+  snpOnly=T)
+snps.whole.hap
+  #+end_src
+
+  #+RESULTS:
+  #+begin_example
+  /// GENLIGHT OBJECT /////////
+
+   // 117 genotypes,  309 binary SNPs, size: 182.4 Kb
+   334 (0.92 %) missing data
+
+   // Basic content
+     @gen: list of 117 SNPbin
+     @ploidy: ploidy of each individual  (range: 1-1)
+
+   // Optional content
+     @ind.names:  117 individual labels
+     @loc.all:  309 alleles
+     @position: integer storing positions of the SNPs
+     @other: a list containing: elements without names
+  #+end_example
+2) Convert =genlight= to =geno= format (a la =dartR=) and run =snmf=
+  #+begin_src R :results silent
+geno.hap <- as.matrix(snps.whole.hap)
+geno.hap[is.na(geno.hap)] <- 9
+
+outfile.hap <- "3-structure-haplotype"
+write.table(
+  geno.hap,
+  paste(outfile.hap, ".lfmm", sep = ""),
+  col.names = FALSE,
+  row.names = FALSE,
+  sep = " "
+)
+## write geno
+write.table(
+  t(geno.hap),
+  paste(outfile.hap, ".geno", sep = ""),
+  col.names = FALSE,
+  row.names = FALSE,
+  sep = ""
+)
+
+## project <- snmf(paste0(outfile.hap, ".geno"),
+##                 K = 1:15,
+##                 entropy = T,
+##                 repetitions = 10,
+##                 project = "new",
+##                 ploidy=1,
+##                 CPU = 4)
+
+project.hap <- load.snmfProject(paste0(outfile.hap, ".snmfProject"))
+#+end_src
+3) PCA scree plot
+   #+header: :results output graphics file
+   #+header: :file 3-structure-haplotype-scree.png
+   #+header: :width 8 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+
+pca.scree.hap.plot <- pca(paste0(outfile.hap, ".lfmm"),
+                          scale=T, K=15) %>%
+  tracy.widom %>%
+  ggplot(aes(N, percentage)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels=scales::label_percent()) +
+  labs(title = "PCA Scree Plot",
+       x = "Principal Components",
+       y = "Percentage of Variance") +
+  theme_minimal()
+pca.scree.hap.plot
+
+   #+end_src
+
+   #+RESULTS:
+   [[file:3-structure-haplotype-scree.png]]
+4) Cross-Entropy
+   #+header: :results output graphics file
+   #+header: :file 3-structure-haplotype-entropy.png
+   #+header: :width 8 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+
+# Get best Ks by finding minimum min, mean, and max cross entropy
+summary.info.hap = summary(project.hap)$crossEntropy
+
+plot.entropy.hap <- as.data.frame(t(summary.info.hap)) %>%
+  tibble::rownames_to_column("K") %>%
+  mutate(K = as.numeric(substring(K, 4))) %>%
+  ggplot(aes(K, min)) +
+#  geom_ribbon(aes(ymin=min, ymax=max), alpha=0.2, color='grey70') +
+#  geom_hline(aes(yintercept = min(summary.info[2,]), color = "red")) +
+  geom_line(aes(x = K, y = min, group=1)) +
+  geom_point() +
+  labs(title = "Cross-entropy versus K",
+       x = "Number of ancestral populations (K)",
+       y = "Minimum Cross-entropy") +
+  theme_minimal() +
+  theme(legend.position = "none")
+plot.entropy.hap
+
+  #+end_src
+
+  #+RESULTS:
+  [[file:3-structure-haplotype-entropy.png]]
+5) Combine scree and entropy plot
+   #+header: :results output graphics file
+   #+header: :file 3-structure-haplotype-fig-K.png
+   #+header: :width 8 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+cowplot::plot_grid(pca.scree.hap.plot, plot.entropy.hap,
+                   labels = LETTERS)
+   #+end_src
+
+   #+RESULTS:
+   [[file:3-structure-haplotype-fig-K.png]]
+6) Get lowest entropy run for each K
+   #+begin_src R :results output drawer
+# Get best run for each K
+best.runs.hap <- lapply(project.hap@runs, function(x)
+  c(K=x@K, run=x@run, crossEntropy=x@crossEntropy)) %>%
+  bind_rows() %>%
+  mutate(K=as.integer(K),
+         run=as.integer(run)) %>%
+  group_by(K) %>%
+  filter(crossEntropy ==min(crossEntropy)) %>%
+  arrange(K)
+ascii(best.runs.hap, format = c("d", "d", "f"),
+      digits=5, include.rownames = F)
+  #+end_src
+
+  #+RESULTS:
+  :results:
+  |  K | run | crossEntropy |
+  |----+-----+--------------|
+  |  1 |   9 |      0.11555 |
+  |  2 |   4 |      0.09806 |
+  |  3 |   4 |      0.08358 |
+  |  4 |   4 |      0.07834 |
+  |  5 |   4 |      0.07864 |
+  |  6 |   7 |      0.08618 |
+  |  7 |   7 |      0.09838 |
+  |  8 |   7 |      0.09803 |
+  |  9 |   4 |      0.10207 |
+  | 10 |   4 |      0.09848 |
+  | 11 |   4 |      0.09652 |
+  | 12 |   4 |      0.09984 |
+  | 13 |   4 |      0.09443 |
+  | 14 |   9 |      0.09513 |
+  | 15 |   7 |      0.10368 |
+  :end:
+7) Assign memberships for best run of each K
+
+     #+begin_src R :results silent
+admix.coefs.hap <- mapply(Q, K=best.runs.hap$K, run=best.runs.hap$run,
+                      MoreArgs = list(project.hap)) %>%
+  lapply(as.data.frame) %>%
+  lapply(rowid_to_column, "ID") %>%
+  bind_rows(.id="K") %>%
+  gather(-K, -ID, key="pop", value="q") %>%
+  filter(!is.na(q)) %>%
+  mutate(pop = as.numeric(sub("V", "", pop)),
+         K = as.numeric(K)) %>%
+  group_by(K, ID) %>%
+  reframe(K, ID, pop, q,
+          best.pop=pop[which.max(q)],
+          best.q = max(q))
+
+admix.coefs.hap %>%
+  mutate(ID = snps.whole.hap@ind.names[ID]) %>%
+  write.table(file = "3-structure-haplotype.admix.coef.txt",
+              sep="\t", quote=F)
+
+   #+end_src
+8) Structure membership graph (all)
+   #+header: :results output graphics file
+   #+header: :file 3-structure-haplotype-membership-all.png
+   #+header: :width 20 :height 10 :units in :res 100 :bg white
+   #+begin_src R
+plots.structure.hap.all <- lapply(2:9, function(x) {
+  member.data <- filter(admix.coefs.hap, K==x)
+  member.data.order <- spread(member.data, pop, q) %>%
+    select(-ID, -K, -best.pop, -best.q) %>%
+    as.matrix %>%
+    dist %>%
+    hclust(method="ave") %>%
+    as.dendrogram %>%
+    order.dendrogram
+  haplotypes.names <- snps.whole@ind.names
+  member.data <-  mutate(member.data,
+                         ID = haplotypes.names[ID],
+                         pop = factor(pop),
+                         best.pop = factor(best.pop)) %>%
+    mutate(ID = factor(ID, haplotypes.names[member.data.order] ))
+  ggplot(member.data, aes(ID, q, fill=pop)) +
+    geom_col(width=1) +
+    facet_grid(cols=vars(best.pop), scales="free", space="free",
+               switch='x') +
+    scale_fill_iwanthue() +
+    scale_x_discrete(position = "top", expand = c(0,0)) +
+    scale_y_continuous(labels=scales::label_percent(),
+                       expand = c(0,0))+
+    theme_bw()+
+    theme( axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          legend.position = 'right')
+})
+cowplot::plot_grid(plotlist=plots.structure.hap.all, ncol=2)
+ #+end_src
+
+ #+RESULTS:
+ [[file:3-structure-haplotype-membership-all.png]]
+9) Sankey
+   #+header: :results output graphics file
+   #+header: :file 3-structure-membership-sankey.png
+   #+header: :width 12 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+filter(admix.coefs.hap, between(K, 2,9)) %>%
+  select(K, ID, best.pop) %>%
+  unique %>%
+  mutate(K=paste0("K", K)) %>%
+  spread(K, best.pop) %>%
+  mutate(K2 = factor(K2, 1:2, c(1,2)),
+         K3 = factor(K3, 1:3, c(1,2,3)),
+         K4 = factor(K4, 1:4, c(3,1,2,4)),
+         K5 = factor(K5, 1:5, c(3,2,4,5,1)),
+         K6 = factor(K6, 1:6, c(4,2,3,6,5,1)),
+         K7 = factor(K7, 1:7, c(4,3,3,1,5,2,7)),
+         K8 = factor(K8, 1:8, c(2,5,3,8,1,4,6,7)),
+         K9 = factor(K9, 1:9, c(8,1,3,6,5,7,2,5,9))) %>%
+  make_long(starts_with("K")) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  geom_alluvial(flow.alpha = .6) +
+  geom_alluvial_text(size = 3, color = "white") +
+  scale_x_discrete(expand = c(0,0)) +
+  scale_fill_viridis_d(drop = FALSE) +
+  theme_alluvial(base_size = 18) +
+  labs(x = NULL) +
+  theme(legend.position = "none",
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.title = element_text(hjust = .5))
+   #+end_src
+
+   #+RESULTS:
+   [[file:3-structure-membership-sankey.png]]
+10) Structure membership graph (selecting K=4)
+    #+header: :results output graphics file
+    #+header: :file 3-structure-membership-K4.png
+    #+header: :width 16 :height 4 :units in :res 100 :bg white
+    #+begin_src R
+member.data.hap <- filter(admix.coefs.hap, K==4) %>%
+  mutate(ID = factor( snps.whole.hap@ind.names[ID],
+                     spread(., pop, q) %>%
+                     select(-ID, -K, -best.pop, -best.q) %>%
+                     as.matrix %>%
+                     dist %>%
+                     hclust(method="ave") %>%
+                     getElement("order") %>%
+                     snps.whole.hap@ind.names[.]),
+         pop=factor(pop))
+
+ggplot(member.data.hap, aes(ID, q, fill=pop)) +
+    geom_col(width=1) +
+    facet_grid(cols=vars(best.pop), scales="free", space="free",
+               switch='x') +
+    scale_fill_iwanthue() +
+    scale_x_discrete(position = "top", expand = c(0,0)) +
+    scale_y_continuous(labels=scales::label_percent(),
+                       expand = c(0,0))+
+    theme_bw()+
+    theme( axis.text.x.top = element_text(angle = 90, vjust=0.5),
+          axis.title.x = element_blank(),
+          legend.position = 'bottom')
+    #+end_src
+
+    #+RESULTS:
+    [[file:3-structure-membership-K4.png]]
+
+11) Assign membership
+    #+begin_src R
+sequence.membership.hap <- select(member.data.hap, ID, best.pop) %>%
+    left_join( lapply(haplotypes.full@haplist,
+                      as.data.frame, nm="Sample") %>%
+               bind_rows(.id="ID"),
+              by="ID", relationship='many-to-many') %>%
+    select("Haplotype"=ID, Sample, "Population"=best.pop) %>%
+    distinct()
+
+write.table(sequence.membership.hap, "3-structure-membership.K4.txt",
+            sep="\t", row.names = F)
+
+    #+end_src
+
+    #+RESULTS:
+
+12) Combine structure and distance graph
+    #+header: :results output graphics file
+    #+header: :file 3-structure-membership-distance.png
+    #+header: :width 13 :height 13 :units in :res 100 :bg white
+    #+begin_src R
+plot.structure.hap <- member.data.hap %>%
+mutate(ID = factor(ID,
+                   haplotypes.full.dist.order)) %>%
+  ggplot(aes(ID, q, fill=factor(pop))) +
+  geom_col(width=1) +
+  scale_fill_iwanthue() +
+  scale_x_discrete(expand = c(0,0)) +
+  scale_y_continuous(labels=scales::label_percent(),
+                     expand = c(0,0))+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5),
+        axis.title.x = element_blank(),
+        legend.position = 'none')
+
+plot.distance.hap <-
+  haplotypes.fill.dist %>%
+  as.matrix %>%
+  as.data.frame %>%
+  rownames_to_column("Hap1") %>%
+  gather(-Hap1, key="Hap2", value="dist") %>%
+  filter(!Hap1 %in% c("outgroup-001")) %>%
+  filter(!Hap2 %in% c("outgroup-001")) %>%
+  mutate(Hap1 = factor(Hap1, haplotypes.full.dist.order),
+         Hap2 = factor(Hap2, haplotypes.full.dist.order)) %>%
+  left_join(member.data.hap, by=c("Hap1"="ID")) %>%
+  left_join(member.data.hap, by=c("Hap2"="ID")) %>%
+  mutate(pop = best.pop.x,
+         pop = factor(pop)) %>%
+  select(Hap1, Hap2, dist, pop) %>%
+  distinct() %>%
+  ggplot(aes(Hap1, Hap2, fill=dist)) +
+  scale_x_discrete(name="Haplotype", position = 'top') +
+  scale_y_discrete(name="Haplotype", position = 'right') +
+   scale_fill_gradient(limit=c(0,20), low="grey30", high="white",
+                          na.value="white") +
+  ##scale_fill_viridis_c(limit=c(0,15), na.value = 'white')+
+  geom_tile() +
+  theme_bw() +
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        legend.position = 'none')
+
+
+legend <-
+  get_plot_component(plot.distance.hap +
+                     geom_point(aes(color=pop),na.rm = T) +
+                     scale_color_iwanthue() +
+                     guides(color=guide_legend(
+                              title="Population",
+                              override.aes = list(size=5),
+                              theme = theme(legend.text.position =
+                                              "top")),
+                            fill=guide_colorbar(title="Distance"))+
+                     theme(legend.position = "top",
+                           legend.title.position = "top",
+                           legend.box = "vertical",
+                           legend.box.just = "left"),
+                     'guide-box-top',
+                     return_all = TRUE) %>%
+  ggdraw
+
+plot_grid(
+  plot.structure.hap,
+  legend,
+  plot.distance.hap,
+  plot.structure.hap +
+  coord_flip() +
+  theme(axis.title.y = element_blank(),
+        panel.grid = element_blank(),
+        legend.position="none"),
+  rel_widths = c(10,2), rel_heights = c(c(2,10)),
+  align="hv", axis='tblr')
+    #+end_src
+
+    #+RESULTS:
+    [[file:3-structure-membership-distance.png]]
+
+13) stats
+    - Number of haplotypes in each pop
+      #+begin_src R :results value table :colnames yes
+sequence.membership.hap %>%
+  group_by(Haplotype, Population) %>%
+  count(name="Size") %>%
+  group_by(Population) %>%
+  summarise(Haplotypes=n(),
+            Samples=sum(Size),
+            Range = sprintf("[%d - %d]",
+                            min(Size),
+                            max(Size)))
+      #+end_src
+
+      #+RESULTS:
+      | Population | Haplotypes | Samples | Range    |
+      |------------+------------+---------+----------|
+      |          1 |         67 |     237 | [1 - 81] |
+      |          2 |         14 |      35 | [1 - 8]  |
+      |          3 |         35 |     113 | [1 - 31] |
+      |          4 |          1 |       1 | [1 - 1]  |
+
+    - pop4 q values
+      #+begin_src R :results value table :colnames yes
+filter(member.data.hap, pop == 4 & q > 0.0001) %>%
+  select( "Haplotype"=ID, q, best.q)%>%
+  left_join(sequence.membership.hap) %>%
+  left_join(
+    read.delim("../4-mtCR/4-struct-membership.hap-fixed.txt"),
+    by=c("Sample"="Acc")) %>%
+  rename("ID"="mtCR-hap", "best.pop"='mtCR-pop')
+     #+end_src
+
+     #+RESULTS:
+     | P | Haplo    |      q | Sample      | mtCR-hap    | mtCR-pop   |
+     |---+----------+--------+-------------+-------------+------------|
+     | 1 | mito-062 | 0.2250 | SER11-0141  | mtCR.mix-11 | mtCR.inner |
+     | 4 | mito-097 | 0.9997 | SER19-00888 | mtCR.mix-10 | mtCR.outer |
+
+    - population strand by code
+      #+begin_src R :results value table :colnames yes
+sequence.membership.hap %>%
+  left_join(
+    data.table::fread("../2-samples/bigtable.tsv", skip=2),
+    by=c(Sample="Sample Name")) %>%
+  group_by(`Decomp Code`, Population) %>%
+  count %>%
+  spread(key=`Decomp Code`, value=n, fill = 0) %>%
+  mutate(Unknown = `#N/A` + `N/A`) %>%
+  select("Population", `1`, `2`, `3`, `4`, "Unknown")
+      #+end_src
+
+      #+RESULTS:
+      | Population | 1 |  2 |   3 |  4 | Unknown |
+      |------------+---+----+-----+----+---------|
+      |          1 | 3 | 31 | 156 | 18 |      29 |
+      |          2 | 0 |  2 |  21 |  5 |       7 |
+      |          3 | 0 | 11 |  70 |  6 |      26 |
+      |          4 | 0 |  0 |   0 |  0 |       1 |
+    - population strand by year
+      #+begin_src R :results value table :colnames yes
+sequence.membership.hap %>%
+  left_join(
+    data.table::fread("../2-samples/bigtable.tsv", skip=2),
+    by=c(Sample="Sample Name")) %>%
+  mutate(Year=year(`Collection Date`)) %>%
+  group_by(Year, Population) %>%
+  count %>%
+  spread(key=Population, value=n, fill = 0)
+      #+end_src
+
+      #+RESULTS:
+      | Year |  1 | 2 |  3 | 4 |
+      |------+----+---+----+---|
+      | 2010 | 42 | 5 | 10 | 0 |
+      | 2011 | 44 | 2 |  9 | 0 |
+      | 2012 |  5 | 2 |  5 | 0 |
+      | 2013 |  9 | 0 |  4 | 0 |
+      | 2014 |  6 | 1 |  4 | 0 |
+      | 2015 |  3 | 1 |  2 | 0 |
+      | 2016 | 17 | 1 |  4 | 0 |
+      | 2017 |  6 | 0 |  6 | 0 |
+      | 2018 | 13 | 1 |  5 | 0 |
+      | 2019 | 41 | 9 | 30 | 1 |
+      | 2020 | 24 | 7 | 13 | 0 |
+      | 2021 | 27 | 6 | 21 | 0 |
+    - How do the full haplotypes compare with the vollmer haplotypes
+                There's very little overlap between the mtCR.mix haplotypes and any other group besides the Green pop. So, the only thing this comparison can find is green.
+      #+begin_src R :results value table :colnames yes
+sequence.membership.hap %>%
+  inner_join(mtCR.hap.membership, by=c("Sample"="Acc")) %>%
+  select("Hap.mtCR"="ID", "Hap.full"="Haplotype", Population) %>%
+  distinct() %>%
+  left_join(read.delim("../4-mtCR/haplotype.published-groups.txt"),
+            by = c("Hap.mtCR" = "ID")) %>%
+  mutate(
+    Group = factor(Group, c('NW.inner', 'E.inner', 'NW.outer',
+                            'E.outer', 'NW.Oceanic', 'NE.oceanic',
+                            'E.oceanic', 'green', 'blue', "New"))) %>%
+  filter(Set == '2021') %>%
+  select(Hap.mtCR, Population, Group, count) %>%
+  distinct() %>%
+  spread(key="Group", value="count") %>%
+  as.data.frame
+      #+end_src
+
+      #+RESULTS:
+      | Hap.mtCR    | Population | green | blue |
+      |-------------+------------+-------+------|
+      | mtCR.mix-1  |          1 |   152 |    1 |
+      | mtCR.mix-1  |          3 |   152 |    1 |
+      | mtCR.mix-10 |          4 |     8 |      |
+      | mtCR.mix-11 |          1 |     6 |    1 |
+      | mtCR.mix-12 |          1 |     1 |      |
+      | mtCR.mix-2  |          3 |   103 |      |
+      | mtCR.mix-3  |          2 |    75 |    1 |
+      | mtCR.mix-3  |          3 |    75 |    1 |
+      | mtCR.mix-4  |          1 |   160 |      |
+      | mtCR.mix-5  |          2 |     5 |      |
+      | mtCR.mix-5  |          3 |     5 |      |
+      | mtCR.mix-6  |          1 |     3 |      |
+      | mtCR.mix-7  |          2 |    11 |      |
+      | mtCR.mix-8  |          3 |     2 |      |
+      | mtCR.mix-9  |          3 |     7 |      |
+    - mtCR haplotypes in pop 2
+
+      #+begin_src R :results value table :colnames yes
+sequence.membership.hap %>%
+  inner_join(mtCR.hap.membership, by=c("Sample"="Acc")) %>%
+  select("Hap.mtCR"="ID", "Hap.full"="Haplotype", Population) %>%
+  distinct() %>%
+  group_by(Hap.mtCR) %>%
+  filter(any(Population == 2)) %>%
+  ungroup() %>%
+  left_join(read.delim("../4-mtCR/haplotype.published-groups.txt"),
+            by = c("Hap.mtCR" = "ID")) %>%
+  mutate(
+    Group = factor(Group, c('NW.inner', 'E.inner', 'NW.outer',
+                            'E.outer', 'NW.Oceanic', 'NE.oceanic',
+                            'E.oceanic', 'green', 'blue', "New"))) %>%
+  select(Hap.mtCR, Population, Group, count) %>%
+  distinct() %>%
+  spread(key="Group", value="count") %>%
+  as.data.frame
+      #+end_src
+
+      #+RESULTS:
+      | Hap.mtCR   | Population | NW.inner | E.inner | NW.outer | E.outer | green | blue | New |
+      |------------+------------+----------+---------+----------+---------+-------+------+-----|
+      | mtCR.mix-3 |          2 |       63 |       6 |        3 |       1 |    75 |    1 |  46 |
+      | mtCR.mix-3 |          3 |       63 |       6 |        3 |       1 |    75 |    1 |  46 |
+      | mtCR.mix-5 |          2 |        2 |         |          |         |     5 |      |  22 |
+      | mtCR.mix-5 |          3 |        2 |         |          |         |     5 |      |  22 |
+      | mtCR.mix-7 |          2 |          |         |          |         |    11 |      |   8 |
+      | mtCR.new-5 |          2 |          |         |          |         |       |      |   1 |
+
+
+
+** Phylogenetics tree
+
+
+#+begin_src R
+tree.data <- nj(haplotypes.full.dist) %>%
+  root(outgroup="outgroup-001")
+
+write.tree(tree.data, file="haplotypes-nj-tree.nwk")
+
+#+end_src
+
+#+RESULTS:
+
+#+HEADER: :results output graphics file :file haplotype-nj-tree.png
+#+header: :width 12 :height 12 :units in :bg white :res 200
+#+begin_src R
+anno <- data.frame(ID=tree.data$tip.label) %>%
+  left_join(sequence.membership.hap, by=c("ID"="Haplotype")) %>%
+  select(-Sample) %>%
+  mutate(clade=factor(Population)) %>%
+  distinct()
+anno
+
+layout <- ggtree(tree.data, layout = "circular") %<+% anno
+p <- layout +
+  geom_tippoint(aes(color=clade)) +
+  ## geom_label_repel(aes(label=ifelse(label %in% c("SER19-00888",
+  ##                                                "SER11-0141"),
+  ##                             label, NA),
+  ##                      segment.linetype=2), na.rm = T) +
+  geom_treescale(y=15) +
+  scale_color_iwanthue(na.value="black") +
+  theme(legend.position=c(0.4,0.35),
+        legend.background = element_blank(),
+        plot.margin=grid::unit(c(0,0,0,0), "mm"))
+p <- rotate_tree(p, -45)
+p <- flip(p, 187, 189)
+p <- flip(p, 214, 220)
+p
+      #+end_src
+
+#+HEADER: :results output graphics file
+#+HEADER: :file full-mito-nj-tree-circular.png
+#+header: :width 12 :height 12 :units in :res 200 :bg white
+#+begin_src R
+sequence.membership <- read.delim("4-struct-membership.K4.tab",
+                                  col.names = c("ID", "clade")) %>%
+  mutate(clade=paste("population", clade))
+
+anno <- data.frame(ID=tree.data$tip.label) %>%
+  left_join(sequence.membership)
+
+anno[anno$ID=="SER19-00888","label"] <- "SER19-00888"
+anno[anno$ID=="SER11-0141","label"]  <- "SER11-0141"
+anno[1,"label"] <- "NC_060612.1"
+
+layout <- ggtree(tree.data, layout = "circular") %<+% sequence.membership
+
+p <- layout +
+  geom_tippoint(aes(color=clade)) +
+  geom_label_repel(aes(label=ifelse(label %in% c("SER19-00888",
+                                                 "SER11-0141"),
+                              label, NA),
+                       segment.linetype=2), na.rm = T) +
+  geom_treescale(y=45) +
+  scale_color_iwanthue(na.value="black") +
+  theme(legend.position=c(0.4,0.35),
+        legend.background = element_blank(),
+        plot.margin=grid::unit(c(0,0,0,0), "mm"))
+p <- rotate_tree(p, -45)
+p <- flip(p, 628, 629)
+p
+      #+end_src
+
+      #+RESULTS:
+      [[file:full-mito-nj-tree-circular.png]]
+
+** Map
+   #+header: :results output graphics file
+   #+header: :file haplotype-map.png
+   #+header: :width 8 :height 8 :units in :res 100 :bg white
+   #+begin_src R
+map.data <-
+  data.table::fread("../2-samples/bigtable.tsv", skip=2)  %>%
+  separate(`Latitude/Longitude`, into=c('lat', 'lon', NA),
+           sep="[NW]") %>%
+  mutate(lat = as.numeric(lat),
+         lon=as.numeric(lon) * -1) %>%
+  select(Sample="Sample Name", lat, lon) %>%
+  right_join(sequence.membership.hap) %>%
+  mutate(Population = factor(Population),
+         Haplotype = fct_lump_min(Haplotype, min=1,
+                                  other_level="Singleton"))
+
+
+
+bound.lat <- range(map.data$lat, na.rm=T)
+bound.lon <- range(map.data$lon, na.rm=T)
+
+usa <- map_data("state", region=c("mississippi",
+                                   "alabama",
+                                   "louisiana",
+                                   "florida"))
+
+levels(map.data$Haplotype)
+
+sapply(map.boot.ci, getElement, 'normal') %>%
+  t %>% as.data.frame %>%
+  setNames(nm=c("Interval", "Left", "Right")) %>%
+  rowid_to_column("Population")
+
+map.plot <- ggplot(map.data)+
+    geom_polygon(aes(long, lat, fill=region), usa, alpha=0.5) +
+    geom_point(aes(lon, lat, color=Population, shape=),
+               alpha=0.7, size=1) +
+    stat_ellipse(aes(lon, lat, color=Population,
+                     group=Population),
+                 type="euclid", level=0.01) +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_color_iwanthue() +
+  coord_quickmap(xlim= bound.lon, ylim=bound.lat, expand=F) +
+  facet_wrap(~Population, ncol=1) +
+  theme_minimal() +
+  theme(legend.position = 'none',
+        axis.title=element_blank())
+
+
+   #+end_src
+
+   #+RESULTS:
+   [[file:haplotype-map.png]]
+
+*** COMMENT Is the stranding area of group 2 significant
+#+begin_src R
+library(boot)
+
+pop.mean <- function(data, i) {
+  split(data$lon[i], data$Population) %>%
+    sapply(mean)
+}
+
+map.boot <- boot(map.data, pop.mean, R=1000000,
+                  parallel = 'multicore')
+
+map.boot
+
+#+end_src
+
+#+RESULTS:
+#+begin_example
+
+ORDINARY NONPARAMETRIC BOOTSTRAP
+
+
+Call:
+boot(data = map.data, statistic = pop.mean, R = 1e+06, parallel = "multicore")
+
+
+Bootstrap Statistics :
+     original      bias    std. error
+t1* -88.93301 -0.03685214  0.02589501
+t2* -89.18230  0.21235195  0.06729528
+t3* -88.98732  0.01740182  0.03751887
+t4* -88.30974 -0.66029239  0.39864278
+#+end_example
+
+Confidence Intervals
+#+begin_src R
+#plot(map.boot,index=2)
+map.boot.ci <- lapply(1:3, boot.ci,
+                      boot.out=map.boot,
+                      type="norm",
+                      conf=0.99)
+map.boot.ci
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[[1]]
+BOOTSTRAP CONFIDENCE INTERVAL CALCULATIONS
+Based on 1000000 bootstrap replicates
+
+CALL :
+FUN(boot.out = ..1, conf = 0.99, type = "norm", index = X[[i]])
+
+Intervals :
+Level      Normal
+99%   (-88.96, -88.83 )
+Calculations and Intervals on Original Scale
+
+[[2]]
+BOOTSTRAP CONFIDENCE INTERVAL CALCULATIONS
+Based on 1000000 bootstrap replicates
+
+CALL :
+FUN(boot.out = ..1, conf = 0.99, type = "norm", index = X[[i]])
+
+Intervals :
+Level      Normal
+99%   (-89.57, -89.22 )
+Calculations and Intervals on Original Scale
+
+[[3]]
+BOOTSTRAP CONFIDENCE INTERVAL CALCULATIONS
+Based on 1000000 bootstrap replicates
+
+CALL :
+FUN(boot.out = ..1, conf = 0.99, type = "norm", index = X[[i]])
+
+Intervals :
+Level      Normal
+99%   (-89.10, -88.91 )
+Calculations and Intervals on Original Scale
+#+end_example
+
+Pvalues 
+#+begin_src R :results value table :colnames yes
+
+sapply(1:3, function(x)
+  boot.pval(map.boot,
+            theta_null=mean(map.data$lon),
+            index=x,
+            type='norm')) %>%
+  as.data.frame(nm="Pvalue") %>%
+  rowid_to_column("Group")
+
+#+end_src
+
+#+RESULTS:
+| Group |             Pvalue |
+|-------+--------------------|
+|     1 | 0.0044040000000001 |
+|     2 |   1.0000000001e-06 |
+|     3 |           0.353292 |
+
+#+begin_src R
+conf.int.plot <-
+  sapply(map.boot.ci, getElement, 'normal') %>%
+  t %>% as.data.frame %>%
+  setNames(nm=c("Interval", "Left", "Right")) %>%
+  rowid_to_column("Population") %>%
+#  right_join(group_by(map.data, Population) %>%
+#            summarise(lon=mean(lon))) %>%
+  right_join(rowid_to_column(as.data.frame(map.boot$t0, nm="lon"),
+                             "Population")) %>%
+  ggplot(aes(x=lon, y=Population, color=factor(Population),
+             xmin=Left, xmax = Right)) +
+  geom_pointrange()
+
+density.plot <- map.data %>%
+  mutate(Population='all') %>%
+  rbind(map.data) %>%
+  ggplot(aes(lon,group=Population, color=Population)) +
+  geom_density()
+
+
+density.plot %>%
+  insert_bottom(conf.int.plot, height=0.15)
+#+end_src
+
+** Stats
+1) Haplotype diversity
+  #+begin_src R :results output drawer
+library(pegas)
+
+pegas.haps <- haplotypes::as.DNAbin(as.dna(haplotypes.full))
+pegas.haps <- pegas.haps[-1,]
+class(pegas.haps) <- c("haplotype", "DNAbin")
+attr(pegas.haps, "index") <- haplotypes.full@hapind
+attr(pegas.haps, "from") <- "haps"
+
+pegas.haps.split <- select(sequence.membership.hap,
+                           Haplotype, Population) %>%
+  distinct %>%
+  split(., .$Population) %>%
+  lapply(pull, "Haplotype") %>%
+  lapply(function(x) {
+    haps <- pegas.haps[x,]
+    class(haps) <- c("haplotype", "DNAbin")
+    attr(haps, "index") <- haplotypes.full@hapind[x]
+    attr(haps, "from") <- "haps"
+    haps
+  })
+pegas.haps.split[['all']] <- pegas.haps
+
+lapply(pegas.haps.split, pegas::hap.div, variance = T) %>%
+  lapply(setNames, c('Hap. Diversity', 'var')) %>%
+  bind_rows(.id='Population') %>%
+  mutate(Population = fct_relevel(factor(Population),
+                                  c("all", 1:4))) %>%
+  arrange(Population) %>%
+  ascii(digits=c(0, 4, 3),
+        format=c('s', 'f', 'e'),
+        include.rownames = F)
+  #+end_src
+
+  #+RESULTS:
+  :results:
+  | Population | Hap. Diversity |       var |
+  |------------+----------------+-----------|
+  |        all |         0.9363 | 6.339e-05 |
+  |          1 |         0.8604 | 3.701e-04 |
+  |          2 |         0.8857 | 8.461e-04 |
+  |          3 |         0.8761 | 4.244e-04 |
+  |          4 |                |           |
+  :end:
+2) Nucleotide Diversity (pi)
+  #+begin_src R :results output drawer
+fasta.split <- sequence.membership.hap %>%
+  split(., .$Population) %>%
+  lapply(pull, "Sample") %>%
+  lapply(function(x) fasta.full[x,])
+fasta.split[['all']] <- fasta.full[-1,]
+
+lapply(fasta.split, nuc.div, variance = T) %>%
+  lapply(setNames, c('pi', 'var')) %>%
+  bind_rows(.id='Population') %>%
+  mutate(Population = fct_relevel(factor(Population),
+                                  c("all", 1:4))) %>%
+  arrange(Population) %>%
+  ascii(digits=c(0, 5, 2),
+        format=c('s', 'f', 'e'),
+        include.rownames = F)
+
+
+  #+end_src
+
+  #+RESULTS:
+  :results:
+  | Population |       pi |        var |
+  |------------+----------+------------|
+  |          1 | 0.000180 | 1.1499e-08 |
+  |          2 |          |            |
+  |          3 | 0.000309 | 2.8008e-08 |
+  |          4 | 0.000172 | 1.0096e-08 |
+  |        all | 0.000507 | 6.7727e-08 |
+  :end:
+3) Population differentiation (Fst)
+
+   #+begin_src R :results value table :colnames yes
+pop.all <- select(sequence.membership.hap,
+              Population, Sample) %>%
+  distinct() %>%
+  pull(Population, name=Sample)
+
+genind.all <- DNAbin2genind(fasta.full[-1,], pop=pop.all)
+strata(genind.all) <- data.frame(pop.all)
+
+set.seed(168495)
+pop <- pop.all
+pop[pop == '1'] <- paste0( pop[pop == '1'],
+          letters[sample.int(6, size = sum(pop==1), replace = T)])
+pop[pop == '3'] <- paste0( pop[pop == '3'],
+          letters[sample.int(3, size = sum(pop==3), replace = T)])
+pop <- factor(pop)
+
+genind.subdivide <- DNAbin2genind(fasta.full[-1,], pop=pop)
+strata(genind.subdivide) <- data.frame(pop)
+
+all <- wc(genind.subdivide, diploid = F)
+pair <-
+  pairwise.WCfst(genind.subdivide, diploid = F) %>%
+  as.data.frame %>%
+  rownames_to_column("PopA") %>%
+  gather(-PopA, key="PopB", value="Fst") %>%
+  filter(PopA < PopB) %>%
+  mutate(PopA = substr(PopA, 0, 1),
+         PopB = substr(PopB, 0, 1)) %>%
+  group_by(PopA, PopB) %>%
+  summarise(Fst = mean(Fst)) %>%
+#  mutate(Fst = ifelse(Fst > 0, Fst, 0)) %>%
+  mutate(class = cut(Fst, breaks=c(0,0.05,0.15,0.25,1),
+                     labels=c("little", "moderate", "great",
+                              "very great"))) %>%
+           arrange(Fst)
+
+rbind(data.frame(PopA='all', PopB='all', Fst=all$FST, class=NA), pair)
+  #+end_src
+
+  #+RESULTS:
+  | PopA | PopB |                   Fst | class      |
+  |------+------+-----------------------+------------|
+  |  all |  all |    0.0492258753638389 |            |
+  |    1 |    3 |  -0.00631719883551522 |            |
+  |    1 |    2 |    0.0234100268611076 | little     |
+  |    2 |    3 |    0.0244663797874993 | little     |
+  |    3 |    4 |      0.43866294973329 | very great |
+  |    1 |    4 |     0.471230894435597 | very great |
+  |    2 |    4 |     0.644444444444445 | very great |
+4) PhiST
+   - Global
+     #+begin_src R
+phistp <- poppr.amova(genind.all, ~pop.all, filter=T, threshold=0.1)
+phistp
+    #+end_src
+    #+RESULTS:
+    #+begin_example
+    Filtering ...
+    Original multilocus genotypes   ... 97
+    Contracted multilocus genotypes ... 81
+
+    Found 3028 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    $call
+    ade4::amova(samples = xtab, distances = xdist, structures = xstruct)
+
+    $results
+                     Df     Sum Sq   Mean Sq
+    Between samples   3   47.51126 15.837088
+    Within samples  382 2921.41483  7.647683
+    Total           385 2968.92609  7.711496
+
+    $componentsofcovariance
+                                   Sigma          %
+    Variations  Between samples 0.120298   1.548639
+    Variations  Within samples  7.647683  98.451361
+    Total variations            7.767981 100.000000
+
+    $statphi
+                             Phi
+    Phi-samples-total 0.01548639
+    #+end_example
+
+   - Per Population
+     #+begin_src R
+phist.subset <- function(pop1, pop2) {
+  print(pop1)
+  print(pop2)
+  pops <- popsub(genind.subdivide, sublist = c(pop1, pop2), drop=T)
+  gc <- as.genclone(pops)
+  phistsp <- poppr.amova(gc, ~pop, filter=T, threshold=0.1)
+  return(unlist(phistsp$statphi))
+}
+
+phist.table <- expand_grid(pop1=levels(pop),
+                           pop2=levels(pop)) %>%
+  filter(pop1 != pop2) %>%
+  rowwise() %>%
+  mutate(phist = phist.subset(pop1, pop2)) %>%
+  ungroup
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    [1] "1a"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 32
+
+    Found 153 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 37
+    Contracted multilocus genotypes ... 36
+
+    Found 239 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 37
+
+    Found 307 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 39
+    Contracted multilocus genotypes ... 35
+
+    Found 238 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 35
+    Contracted multilocus genotypes ... 31
+
+    Found 153 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 26
+    Contracted multilocus genotypes ... 25
+
+     No loci with missing values above 5% found.
+
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 30
+
+    Found 75 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 29
+
+    Found 228 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1a"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 34
+
+    Found 80 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "1a"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 23
+    Contracted multilocus genotypes ... 22
+
+     No loci with missing values above 5% found.
+
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 32
+
+    Found 153 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 35
+    Contracted multilocus genotypes ... 33
+
+    Found 308 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 34
+
+    Found 296 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 38
+    Contracted multilocus genotypes ... 35
+
+    Found 230 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 32
+
+    Found 221 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 24
+    Contracted multilocus genotypes ... 24
+
+    Found 143 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    [1] "1b"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 31
+
+    Found 142 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 27
+
+    Found 220 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1b"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 33
+
+    Found 152 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    [1] "1b"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 20
+    Contracted multilocus genotypes ... 20
+
+    Found 75 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    [1] "1c"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 37
+    Contracted multilocus genotypes ... 36
+
+    Found 239 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 35
+    Contracted multilocus genotypes ... 33
+
+    Found 308 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 38
+
+    Found 468 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 43
+    Contracted multilocus genotypes ... 38
+
+    Found 399 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 38
+    Contracted multilocus genotypes ... 35
+
+    Found 308 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 29
+    Contracted multilocus genotypes ... 28
+
+    Found 225 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 33
+
+    Found 224 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 30
+
+    Found 306 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 40
+    Contracted multilocus genotypes ... 37
+
+    Found 239 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1c"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 24
+    Contracted multilocus genotypes ... 24
+
+    Found 123 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 37
+
+    Found 307 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 34
+
+    Found 296 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 38
+
+    Found 468 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 42
+    Contracted multilocus genotypes ... 38
+
+    Found 385 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 40
+    Contracted multilocus genotypes ... 36
+
+    Found 370 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 31
+    Contracted multilocus genotypes ... 29
+
+    Found 289 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 33
+
+    Found 287 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 30
+
+    Found 372 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 37
+
+    Found 307 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1d"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 25
+    Contracted multilocus genotypes ... 24
+
+    Found 153 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 39
+    Contracted multilocus genotypes ... 35
+
+    Found 238 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 38
+    Contracted multilocus genotypes ... 35
+
+    Found 230 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 43
+    Contracted multilocus genotypes ... 38
+
+    Found 399 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 42
+    Contracted multilocus genotypes ... 38
+
+    Found 385 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 37
+
+    Found 307 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 26
+
+    Found 224 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 39
+    Contracted multilocus genotypes ... 35
+
+    Found 223 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 33
+
+    Found 305 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 39
+    Contracted multilocus genotypes ... 35
+
+    Found 238 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1e"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 26
+    Contracted multilocus genotypes ... 25
+
+    Found 122 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 35
+    Contracted multilocus genotypes ... 31
+
+    Found 153 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 32
+
+    Found 221 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 38
+    Contracted multilocus genotypes ... 35
+
+    Found 308 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 40
+    Contracted multilocus genotypes ... 36
+
+    Found 370 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 37
+
+    Found 307 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 26
+
+    Found 143 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 30
+
+    Found 142 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 28
+
+    Found 294 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 37
+    Contracted multilocus genotypes ... 33
+
+    Found 152 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "1f"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 23
+    Contracted multilocus genotypes ... 21
+
+    Found 75 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "2"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 26
+    Contracted multilocus genotypes ... 25
+
+     No loci with missing values above 5% found.
+
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "2"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 24
+    Contracted multilocus genotypes ... 24
+
+    Found 143 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    [1] "2"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 29
+    Contracted multilocus genotypes ... 28
+
+    Found 225 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "2"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 31
+    Contracted multilocus genotypes ... 29
+
+    Found 289 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "2"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 26
+
+    Found 224 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "2"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 26
+
+    Found 143 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "2"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 23
+    Contracted multilocus genotypes ... 22
+
+    Found 69 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "2"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 21
+    Contracted multilocus genotypes ... 20
+
+    Found 214 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "2"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 27
+    Contracted multilocus genotypes ... 26
+
+    Found 74 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "2"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 11
+    Contracted multilocus genotypes ... 11
+
+     No missing values detected.
+
+    [1] "3a"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 30
+
+    Found 75 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3a"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 31
+
+    Found 142 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3a"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 33
+
+    Found 224 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3a"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 33
+
+    Found 287 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3a"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 39
+    Contracted multilocus genotypes ... 35
+
+    Found 223 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3a"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 30
+
+    Found 142 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3a"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 23
+    Contracted multilocus genotypes ... 22
+
+    Found 69 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "3a"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 29
+    Contracted multilocus genotypes ... 26
+
+    Found 213 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "3a"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 35
+    Contracted multilocus genotypes ... 33
+
+    Found 73 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "3a"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 18
+    Contracted multilocus genotypes ... 17
+
+    Found 35 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "3b"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 29
+
+    Found 228 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3b"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 27
+
+    Found 220 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3b"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 30
+
+    Found 306 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3b"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 30
+
+    Found 372 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3b"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 33
+
+    Found 305 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3b"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 28
+
+    Found 294 missing values.
+
+    4 loci contained missing values greater than 5%
+
+    Removing 4 loci: 3308, 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3b"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 21
+    Contracted multilocus genotypes ... 20
+
+    Found 214 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "3b"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 29
+    Contracted multilocus genotypes ... 26
+
+    Found 213 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "3b"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 30
+
+    Found 228 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "3b"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 17
+    Contracted multilocus genotypes ... 16
+
+    Found 112 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "3c"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 36
+    Contracted multilocus genotypes ... 34
+
+    Found 80 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "3c"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 34
+    Contracted multilocus genotypes ... 33
+
+    Found 152 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    [1] "3c"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 40
+    Contracted multilocus genotypes ... 37
+
+    Found 239 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3c"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 41
+    Contracted multilocus genotypes ... 37
+
+    Found 307 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3c"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 39
+    Contracted multilocus genotypes ... 35
+
+    Found 238 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3c"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 37
+    Contracted multilocus genotypes ... 33
+
+    Found 152 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "3c"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 27
+    Contracted multilocus genotypes ... 26
+
+    Found 74 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "3c"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 35
+    Contracted multilocus genotypes ... 33
+
+    Found 73 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "3c"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 33
+    Contracted multilocus genotypes ... 30
+
+    Found 228 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "3c"
+    [1] "4"
+    Filtering ...
+    Original multilocus genotypes   ... 25
+    Contracted multilocus genotypes ... 24
+
+    Found 40 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "4"
+    [1] "1a"
+    Filtering ...
+    Original multilocus genotypes   ... 23
+    Contracted multilocus genotypes ... 22
+
+     No loci with missing values above 5% found.
+
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "4"
+    [1] "1b"
+    Filtering ...
+    Original multilocus genotypes   ... 20
+    Contracted multilocus genotypes ... 20
+
+    Found 75 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 7761, 12501
+    [1] "4"
+    [1] "1c"
+    Filtering ...
+    Original multilocus genotypes   ... 24
+    Contracted multilocus genotypes ... 24
+
+    Found 123 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "4"
+    [1] "1d"
+    Filtering ...
+    Original multilocus genotypes   ... 25
+    Contracted multilocus genotypes ... 24
+
+    Found 153 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 7761, 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "4"
+    [1] "1e"
+    Filtering ...
+    Original multilocus genotypes   ... 26
+    Contracted multilocus genotypes ... 25
+
+    Found 122 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "4"
+    [1] "1f"
+    Filtering ...
+    Original multilocus genotypes   ... 23
+    Contracted multilocus genotypes ... 21
+
+    Found 75 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 12501, 12980
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    [1] "4"
+    [1] "2"
+    Filtering ...
+    Original multilocus genotypes   ... 11
+    Contracted multilocus genotypes ... 11
+
+     No missing values detected.
+
+    [1] "4"
+    [1] "3a"
+    Filtering ...
+    Original multilocus genotypes   ... 18
+    Contracted multilocus genotypes ... 17
+
+    Found 35 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    [1] "4"
+    [1] "3b"
+    Filtering ...
+    Original multilocus genotypes   ... 17
+    Contracted multilocus genotypes ... 16
+
+    Found 112 missing values.
+
+    3 loci contained missing values greater than 5%
+
+    Removing 3 loci: 3308, 7761, 12501
+    [1] "4"
+    [1] "3c"
+    Filtering ...
+    Original multilocus genotypes   ... 25
+    Contracted multilocus genotypes ... 24
+
+    Found 40 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 12501
+    #+end_example
+
+    #+begin_src R  :results value table :colnames yes
+phist.table %>%
+  separate(pop1, into=c("pop1", "pop1.sub"), sep=c(1)) %>%
+  separate(pop2, into=c("pop2", "pop2.sub"), sep=c(1)) %>%
+  filter(pop1 != pop2) %>%
+  group_by(pop1, pop2) %>%
+  summarise(phist=mean(phist)) %>%
+  arrange(phist)
+    #+end_src
+
+    #+RESULTS:
+    | pop1 | pop2 |                phist |
+    |------+------+----------------------|
+    |    1 |    3 | -0.00374438566705228 |
+    |    1 |    2 |   0.0238006447152306 |
+    |    2 |    3 |   0.0244725148636873 |
+    |    3 |    4 |     0.43866832939318 |
+    |    1 |    4 |    0.472956674811125 |
+    |    2 |    4 |    0.644444444444445 |
+5) Private alleles
+    #+begin_src R :results value table  :colnames yes
+ as.data.frame(table(pop.all))
+
+ private.alleles <-
+ private_alleles(genind.all) %>%
+   as.data.frame %>%
+   rownames_to_column('pop.all') %>%
+   gather(-pop.all, key="POS", value = "alleles") %>%
+   filter(alleles > 0) %>%
+   left_join(as.data.frame(table(pop.all))) %>%
+   mutate(Perc = alleles/Freq) %>%
+   arrange(pop.all)
+
+ private.alleles
+    #+end_src
+
+    #+RESULTS:
+    | pop.all | POS     | alleles | Freq |                Perc |
+    |---------+---------+---------+------+---------------------|
+    |       1 | 3308.c  |       1 |  237 | 0.00421940928270042 |
+    |       1 | 7761.a  |       1 |  237 | 0.00421940928270042 |
+    |       1 | 12501.t |       1 |  237 | 0.00421940928270042 |
+    |       1 | 12980.t |       1 |  237 | 0.00421940928270042 |
+    |       1 | 12980.c |       1 |  237 | 0.00421940928270042 |
+
+    #+begin_src R
+ pull(private.alleles, POS, name=POS) %>%
+   sub('..$', '', .) %>%
+   sapply(as.numeric) %>% #USE SAPPLY TO KEEP NAMES
+   lapply(function(x) fasta.full[,x]) %>%
+   lapply(as.character) %>%
+   lapply(as.data.frame) %>%
+   lapply(rownames_to_column,"ID") %>%
+   bind_rows(.id="POS") %>%
+   left_join(sequence.membership) %>%
+   left_join(private.alleles) %>%
+   filter(best.pop != 2) %>%
+   ggplot(aes(ID, POS, fill=V1)) +
+   geom_tile() +
+   facet_grid(rows=vars(pop), cols=vars(best.pop),
+              scales='free', space = 'free') +
+   theme(axis.text.x=element_text(angle=45, hjust=1, vjust=1,
+                                  size = 8))
+
+    #+end_src
+
+
+
+** COMMENT Structure (Sequences)
+
+1) Load haplotypes into =genlight= object
+  #+begin_src R
+snps.whole <- fasta2genlight(
+  "1-mafft.fasta",
+  quiet = T,
+  snpOnly=T)
+snps.whole
+  #+end_src
+
+  #+RESULTS:
+  #+begin_example
+  /// GENLIGHT OBJECT /////////
+
+   // 386 genotypes,  310 binary SNPs, size: 587.2 Kb
+   1515 (1.27 %) missing data
+
+   // Basic content
+     @gen: list of 386 SNPbin
+     @ploidy: ploidy of each individual  (range: 1-1)
+
+   // Optional content
+     @ind.names:  386 individual labels
+     @loc.all:  310 alleles
+     @position: integer storing positions of the SNPs
+     @other: a list containing: elements without names
+  #+end_example
+2) Convert =genlight= to =geno= format (a la =dartR=) and run =snmf=
+  #+begin_src R :results silent
+geno <- as.matrix(snps.whole)
+geno[is.na(geno)] <- 9
+
+outfile <- "4-structure-sequences/full"
+write.table(
+  geno,
+  paste(outfile, ".lfmm", sep = ""),
+  col.names = FALSE,
+  row.names = FALSE,
+  sep = " "
+)
+## write geno
+write.table(
+  t(geno),
+  paste(outfile, ".geno", sep = ""),
+  col.names = FALSE,
+  row.names = FALSE,
+  sep = ""
+)
+
+## project <- snmf(paste0(outfile, ".geno"),
+##                 K = 1:15,
+##                 entropy = T,
+##                 repetitions = 10,
+##                 project = "new",
+##                 ploidy=1,
+##                 CPU = 4)
+
+project <- load.snmfProject(paste0(outfile, ".snmfProject"))
+#+end_src
+3) PCA scree plot
+   #+header: :results output graphics file
+   #+header: :file 4-struct-scree.png
+   #+header: :width 10 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+
+pca.scree.plot <- pca(paste0(outfile, ".lfmm"), scale=T, K=15) %>%
+  tracy.widom %>%
+  ggplot(aes(N, percentage)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels=scales::label_percent()) +
+  labs(title = "PCA Scree Plot",
+       x = "Principal Components",
+       y = "Percentage of Variance") +
+  theme_minimal()
+pca.scree.plot
+
+   #+end_src
+
+   #+RESULTS:
+   [[file:4-struct-scree.png]]
+4) Cross-Entropy
+   #+header: :results output graphics file
+   #+header: :file 4-struct-entropy.png
+   #+header: :width 8 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+
+# Get best Ks by finding minimum min, mean, and max cross entropy
+summary.info = summary(project)$crossEntropy
+
+plot.entropy <- as.data.frame(t(summary.info)) %>%
+  tibble::rownames_to_column("K") %>%
+  mutate(K = as.numeric(substring(K, 4))) %>%
+  ggplot(aes(K, min)) +
+#  geom_ribbon(aes(ymin=min, ymax=max), alpha=0.2, color='grey70') +
+#  geom_hline(aes(yintercept = min(summary.info[2,]), color = "red")) +
+  geom_line(aes(x = K, y = min, group=1)) +
+  geom_point() +
+  labs(title = "Cross-entropy versus K",
+       x = "Number of ancestral populations (K)",
+       y = "Minimum Cross-entropy") +
+  theme_minimal() +
+  theme(legend.position = "none")
+plot.entropy
+
+  #+end_src
+
+  #+RESULTS:
+  [[file:4-struct-entropy.png]]
+5) Combine scree and entropy plot
+   #+header: :results output graphics file
+   #+header: :file 4-struct-fig-K.png
+   #+header: :width 8 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+cowplot::plot_grid(pca.scree.plot, plot.entropy,
+                   labels = LETTERS)
+   #+end_src
+
+   #+RESULTS:
+   [[file:4-struct-fig-K.png]]
+6) Get lowest entropy run for each K
+   #+begin_src R :results output drawer
+# Get best run for each K
+best.runs <- lapply(project@runs, function(x)
+  c(K=x@K, run=x@run, crossEntropy=x@crossEntropy)) %>%
+  bind_rows() %>%
+  mutate(K=as.integer(K),
+         run=as.integer(run)) %>%
+  group_by(K) %>%
+  filter(crossEntropy ==min(crossEntropy)) %>%
+  arrange(K)
+ascii(best.runs, format = c("d", "d", "f"),
+      digits=5, include.rownames = F)
+  #+end_src
+
+  #+RESULTS:
+  :results:
+  |  K | run | crossEntropy |
+  |----+-----+--------------|
+  |  1 |   7 |      0.05647 |
+  |  2 |   7 |      0.04299 |
+  |  3 |   2 |      0.03877 |
+  |  4 |   7 |      0.03685 |
+  |  5 |   2 |      0.03409 |
+  |  6 |   7 |      0.03390 |
+  |  7 |   7 |      0.03332 |
+  |  8 |   2 |      0.03393 |
+  |  9 |   7 |      0.03342 |
+  | 10 |   2 |      0.03365 |
+  | 11 |   2 |      0.03494 |
+  | 12 |   2 |      0.03166 |
+  | 13 |   2 |      0.03431 |
+  | 14 |   2 |      0.03056 |
+  | 15 |   7 |      0.03174 |
+  :end:
+7) Assign memberships for best run of each K
+
+     #+begin_src R :results silent
+admix.coefs <- mapply(Q, K=best.runs$K, run=best.runs$run,
+                      MoreArgs = list(project)) %>%
+  lapply(as.data.frame) %>%
+  lapply(rowid_to_column, "ID") %>%
+  bind_rows(.id="K") %>%
+  gather(-K, -ID, key="pop", value="q") %>%
+  filter(!is.na(q)) %>%
+  mutate(pop = as.numeric(sub("V", "", pop)),
+         K = as.numeric(K)) %>%
+  group_by(K, ID) %>%
+  reframe(K, ID, pop, q,
+          best.pop=pop[which.max(q)],
+          best.q = max(q)) %>%
+  split(., .$K) %>%
+  lapply(function( x ) {
+    mutate(x, ID=factor(snps.whole@ind.names[ID],
+                        spread(x, pop, q) %>%
+                        select(-ID, -K, -best.pop, -best.q) %>%
+                        as.matrix %>%
+                        dist %>%
+                        hclust(method="ave") %>%
+                        getElement("order") %>%
+                        snps.whole@ind.names[.]),
+    pop=factor(pop),
+    best.pop = factor(best.pop))
+        })
+
+   #+end_src
+8) Structure membership graph (all)
+   #+header: :results output graphics file
+   #+header: :file 4-struct-membership-all.png
+   #+header: :width 20 :height 10 :units in :res 100 :bg white
+   #+begin_src R
+plots.structure <- lapply(admix.coefs[2:9], function(x) {
+  ggplot(x, aes(ID, q, fill=pop)) +
+    geom_col(width=1) +
+    facet_grid(cols=vars(best.pop), scales="free", space="free",
+               switch='x') +
+    scale_fill_iwanthue() +
+    scale_x_discrete(position = "top", expand = c(0,0)) +
+    scale_y_continuous(labels=scales::label_percent(),
+                       expand = c(0,0))+
+    theme_bw()+
+    theme( axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          legend.position = 'right')
+})
+cowplot::plot_grid(plotlist=plots.structure, ncol=2)
+ #+end_src
+
+ #+RESULTS:
+ [[file:4-struct-membership-all.png]]
+9) Sankey
+   #+header: :results output graphics file
+   #+header: :file 4-struct-membership-sankey.png
+   #+header: :width 12 :height 4 :units in :res 100 :bg white
+   #+begin_src R
+bind_rows(admix.coefs[2:9]) %>%
+  select(K, ID, best.pop) %>%
+  unique %>%
+  mutate(K=paste0("K", K)) %>%
+  spread(K, best.pop) %>%
+  mutate(K2 = factor(K2, 1:2, c(2,1)),
+         K3 = factor(K3, 1:3, c(1,3,2)),
+         K4 = factor(K4, 1:4, c(1,3,2,4)),
+         K5 = factor(K5, 1:5, c(4,5,1,3,2)),
+         K6 = factor(K6, 1:6, c(4,5,6,2,3,1)),
+         K7 = factor(K7, 1:7, c(6,4,3,5,7,2,1)),
+         K8 = factor(K8, 1:8, c(4,5,8,7,1,2,3,6)),
+         K9 = factor(K9, 1:9, c(2,7,3,8,9,4,6,5,1))) %>%
+  make_long(starts_with("K")) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  geom_alluvial(flow.alpha = .6) +
+  geom_alluvial_text(size = 3, color = "white") +
+  scale_x_discrete(expand = c(0,0)) +
+  scale_fill_viridis_d(drop = FALSE) +
+  theme_alluvial(base_size = 18) +
+  labs(x = NULL) +
+  theme(legend.position = "none",
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.title = element_text(hjust = .5))
+   #+end_src
+
+   #+RESULTS:
+   [[file:4-struct-membership-sankey.png]]
+10) Structure membership graph (selecting K=4)
+    #+header: :results output graphics file
+    #+header: :file 4-struct-membership-K4.png
+    #+header: :width 28 :height 7 :units in :res 100 :bg white
+    #+begin_src R
+  ggplot(admix.coefs[[4]], aes(ID, q, fill=pop)) +
+    geom_col(width=1) +
+    facet_grid(cols=vars(best.pop), scales="free", space="free",
+               switch='x') +
+    scale_fill_iwanthue() +
+    scale_x_discrete(position = "top", expand = c(0,0)) +
+    scale_y_continuous(labels=scales::label_percent(),
+                       expand = c(0,0))+
+    theme_bw()+
+    theme( axis.text.x = element_text(angle = 90),
+          axis.title.x = element_blank(),
+          legend.position = 'bottom')
+    #+end_src
+
+    #+RESULTS:
+    [[file:4-struct-membership-K4.png]]
+
+11) Assign membership
+    #+begin_src R
+sequence.membership <- select(admix.coefs[[4]],
+                              "Sample"=ID,
+                              "Population"=best.pop) %>%
+    distinct()
+ write.table(sequence.membership, "4-struct-membership.K4.tab",
+            sep="\t", row.names = F)
+
+    #+end_src
+
+    #+RESULTS:
+
+12) stats
+    - sample size of pops
+       #+begin_src R
+ table(sequence.membership$Population)
+      #+end_src
+
+      #+RESULTS:
+      :
+      :   1   2   3   4
+      :  35   1 113 237
+
+    - pop2 q values
+          #+begin_src R
+     filter(admix.coefs[[4]],  pop ==2 ) %>%
+     pull(q) %>% table
+         #+end_src
+
+         #+RESULTS:
+         : .
+         :   9.998e-05 9.99821e-05  9.9991e-05    0.352748      0.9997
+         :         201          98          85           1           1
+    - SER19-00888 and SER11-0141 assignment in mtCR
+         #+begin_src R
+       read.delim("../4-mtCR/4-struct-membership.hap-fixed.txt") %>%
+       filter(Acc %in% c("SER19-00888", "SER11-0141"))
+         #+end_src
+
+         #+RESULTS:
+         : ID         Acc   best.pop
+         : 1 mtCR.mix-11  SER11-0141 mtCR.inner
+         : 2 mtCR.mix-10 SER19-00888 mtCR.outer
+    - population strand by code
+        #+begin_src R :results value table :colnames yes
+       data.table::fread("../2-samples/bigtable.tsv", skip=2)  %>%
+       left_join(sequence.membership, by=c("Sample Name"="ID")) %>%
+       filter(!is.na(best.pop)) %>%
+       mutate(Year=year(`Collection Date`),
+           best.pop = paste0("pop", best.pop)) %>%
+       group_by(`Decomp Code`, best.pop) %>%
+       count  %>%
+       spread(key=`Decomp Code`, value=n, fill = 0)
+        #+end_src
+
+        #+RESULTS:
+        | best.pop | #N/A | 1 |  2 |   3 |  4 | N/A |
+        |----------+------+---+----+-----+----+-----|
+        | pop1     |    7 | 0 |  2 |  21 |  5 |   0 |
+        | pop2     |    0 | 0 |  0 |   0 |  0 |   1 |
+        | pop3     |   21 | 0 | 11 |  70 |  6 |   5 |
+        | pop4     |   27 | 3 | 31 | 156 | 18 |   2 |
+    - population strand by year
+        #+begin_src R :results value table :colnames yes
+       data.table::fread("../2-samples/bigtable.tsv", skip=2)  %>%
+       left_join(sequence.membership, by=c("Sample Name"="ID")) %>%
+       filter(!is.na(best.pop)) %>%
+       mutate(Year=year(`Collection Date`),
+           best.pop = paste0("pop", best.pop)) %>%
+       group_by(Year, best.pop) %>%
+       count %>%
+       spread(key=best.pop, value=n, fill = 0)
+        #+end_src
+
+        #+RESULTS:
+        | Year | pop1 | pop2 | pop3 | pop4 |
+        |------+------+------+------+------|
+        | 2010 |    5 |    0 |   10 |   42 |
+        | 2011 |    2 |    0 |    9 |   44 |
+        | 2012 |    2 |    0 |    5 |    5 |
+        | 2013 |    0 |    0 |    4 |    9 |
+        | 2014 |    1 |    0 |    4 |    6 |
+        | 2015 |    1 |    0 |    2 |    3 |
+        | 2016 |    1 |    0 |    4 |   17 |
+        | 2017 |    0 |    0 |    6 |    6 |
+        | 2018 |    1 |    0 |    5 |   13 |
+        | 2019 |    9 |    1 |   30 |   41 |
+        | 2020 |    7 |    0 |   13 |   24 |
+        | 2021 |    6 |    0 |   21 |   27 |

@@ -28,3 +28,17 @@ mtCR.region.fa
 # Intermediate tree images
 2-raxml/2017/figtree.vollmer2017.svg
 2-raxml/2021/figtree.vollmer2021.svg
+1-mafft.trimmed.fasta
+1-mafft.trimmed.fixed.fasta
+2-haplotypes.with_outgroup.fixed.fasta
+2-haplotypes.without_outgroup.fixed.fasta
+4-structure/haplotypes-fixed.snmf
+4-structure/haplotypes-fixed.snmfProject
+4-structure/haplotypes-fixed.pca
+4-structure/haplotypes-fixed.geno
+4-structure/haplotypes-fixed.lfmm
+haplotype.published-groups.txt
+published-counts.txt
+vollmer.samples.fa.fai
+outgroup.fa
+haplotypes-fixed.pcaProject
