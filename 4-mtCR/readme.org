@@ -800,10 +800,7 @@ write.table(haplotype.membership, "4-struct-membership.hap-fixed.txt",
    #+RESULTS:
 ** Count Heatmap
 
-#+header: :results output graphics file
-#+header: :file haplotype-pop-membership-heatmap.png
-#+header: :width 16 :height 4 :units in :res 100 :bg white
-#+begin_src R
+#+begin_src R :results silent
 anno <- haplotypes.with_outgroup@haplist %>%
   lapply(as.data.frame, nm='ID') %>%
   bind_rows(.id="name") %>%
@@ -826,6 +823,21 @@ anno <- haplotypes.with_outgroup@haplist %>%
                             'E.outer', 'NW.Oceanic', 'NE.oceanic',
                             'E.oceanic', 'green', 'blue', "New"))) %>%
   filter(!is.na(ID))
+
+meta.counts %>%
+  select(ID, Group, count) %>%
+  spread(key=Group, value = count) %>%
+  write.table("published-counts.txt")
+
+write.table(anno, "haplotype.published-groups.txt",
+            sep="\t", row.names=F)
+
+#+end_src
+
+#+header: :results output graphics file
+#+header: :file haplotype-pop-membership-heatmap.png
+#+header: :width 16 :height 4 :units in :res 100 :bg white
+#+begin_src R
 heatmap.plot <- ggplot(anno, aes(ID,Group)) +
   geom_tile(aes(fill=Group), na.rm=T) +
   geom_text(aes(label=count), na.rm=T) +
@@ -846,17 +858,33 @@ heatmap.plot
 #+RESULTS:
 [[file:haplotype-pop-membership-heatmap.png]]
 
-#+begin_src R :results silent
-
-meta.counts %>%
-  select(ID, Group, count) %>%
-  spread(key=Group, value = count) %>%
-  write.table("published-counts.txt")
-
-write.table(anno, "haplotype.published-groups.txt",
-            sep="\t", row.names=F)
-
+#+header: :results output graphics file
+#+header: :file haplotype-pop-membership-barchart.png
+#+header: :width 5 :height 6 :units in :res 200 :bg white
+#+begin_src R
+anno %>%
+  group_by(Set, Group, best.pop) %>%
+  summarise(count=sum(count)) %>%
+  ggplot(aes(Group, count)) +
+  geom_col(aes(fill=Group)) +
+  geom_label(aes(label=count), y=10, fill='white') +
+  facet_grid(cols=vars(Set), rows=vars(best.pop),
+             scales="free", space="free") +
+  scale_fill_manual( values=c(colors[['2021']],
+                              colors[['2017']],
+                              New="grey")) +
+  scale_x_discrete(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0), limits=c()) +
+  coord_cartesian(y=c(0,75)) +
+  theme_bw() +
+  theme(axis.title = element_blank(),
+        axis.text.x= element_text(angle = 25, hjust = 1,
+                                  vjust = 1),
+        legend.position = 'none')
 #+end_src
+
+#+RESULTS:
+[[file:haplotype-pop-membership-barchart.png]]
 
 
 
