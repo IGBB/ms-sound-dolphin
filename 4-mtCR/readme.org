@@ -110,8 +110,8 @@ attached base packages:
 [7] methods   base
 
 other attached packages:
- [1] poppr_2.9.6         hierfstat_0.5-11    aplot_0.2.1
- [4] ascii_2.4           hues_0.2.0          Biostrings_2.66.0
+ [1] aplot_0.2.1         ascii_2.4           poppr_2.9.6
+ [4] hierfstat_0.5-11    hues_0.2.0          Biostrings_2.66.0
  [7] GenomeInfoDb_1.34.9 XVector_0.38.0      IRanges_2.32.0
 [10] S4Vectors_0.36.2    BiocGenerics_0.44.0 ggtree_3.6.2
 [13] tidytree_0.4.5      ape_5.7-1           lubridate_1.9.2
@@ -124,45 +124,44 @@ other attached packages:
 loaded via a namespace (and not attached):
  [1] colorspace_2.1-0       seqinr_4.2-36
  [3] ellipsis_0.3.2         fs_1.6.3
- [5] farver_2.1.2           fansi_1.0.6
- [7] codetools_0.2-19       splines_4.2.2
- [9] cachem_1.0.8           pegas_1.3
-[11] jsonlite_1.8.7         cluster_2.1.6
-[13] shiny_1.7.5.1          compiler_4.2.2
-[15] Matrix_1.6-1.1         fastmap_1.1.1
-[17] lazyeval_0.2.2         cli_3.6.2
-[19] later_1.3.1            htmltools_0.5.6
-[21] tools_4.2.2            igraph_2.0.3
-[23] coda_0.19-4.1          gtable_0.3.5
-[25] glue_1.7.0             GenomeInfoDbData_1.2.9
-[27] reshape2_1.4.4         fastmatch_1.1-4
-[29] Rcpp_1.0.11            statnet.common_4.9.0
-[31] vctrs_0.6.5            nlme_3.1-163
-[33] network_1.18.2         timechange_0.2.0
-[35] mime_0.12              lifecycle_1.0.4
-[37] phangorn_2.11.1        MASS_7.3-60
-[39] zlibbioc_1.44.0        scales_1.3.0
-[41] hms_1.1.3              promises_1.2.1
-[43] parallel_4.2.2         memoise_2.0.1
-[45] ggfun_0.1.3            yulab.utils_0.1.0
-[47] stringi_1.8.4          plotrix_3.8-4
-[49] permute_0.9-7          boot_1.3-30
-[51] rlang_1.1.3            pkgconfig_2.0.3
-[53] bitops_1.0-7           polysat_1.7-7
-[55] lattice_0.21-8         treeio_1.22.0
-[57] patchwork_1.2.0.9000   labeling_0.4.3
-[59] cowplot_1.1.1          tidyselect_1.2.1
-[61] plyr_1.8.8             magrittr_2.0.3
-[63] R6_2.5.1               generics_0.1.3
-[65] sna_2.7-2              pillar_1.9.0
-[67] withr_3.0.0            mgcv_1.9-0
-[69] survival_3.5-7         RCurl_1.98-1.12
-[71] crayon_1.5.2           utf8_1.2.4
-[73] tzdb_0.4.0             grid_4.2.2
-[75] vegan_2.6-6.1          digest_0.6.33
-[77] xtable_1.8-4           httpuv_1.6.12
-[79] gridGraphics_0.5-1     munsell_0.5.1
-[81] ggplotify_0.1.2        quadprog_1.5-8
+ [5] fansi_1.0.6            codetools_0.2-19
+ [7] splines_4.2.2          cachem_1.0.8
+ [9] pegas_1.3              jsonlite_1.8.7
+[11] cluster_2.1.6          shiny_1.7.5.1
+[13] compiler_4.2.2         Matrix_1.6-1.1
+[15] fastmap_1.1.1          lazyeval_0.2.2
+[17] cli_3.6.2              later_1.3.1
+[19] htmltools_0.5.6        tools_4.2.2
+[21] igraph_2.0.3           coda_0.19-4.1
+[23] gtable_0.3.5           glue_1.7.0
+[25] GenomeInfoDbData_1.2.9 reshape2_1.4.4
+[27] fastmatch_1.1-4        Rcpp_1.0.11
+[29] statnet.common_4.9.0   vctrs_0.6.5
+[31] nlme_3.1-163           network_1.18.2
+[33] timechange_0.2.0       mime_0.12
+[35] lifecycle_1.0.4        phangorn_2.11.1
+[37] MASS_7.3-60            zlibbioc_1.44.0
+[39] scales_1.3.0           hms_1.1.3
+[41] promises_1.2.1         parallel_4.2.2
+[43] memoise_2.0.1          ggfun_0.1.3
+[45] yulab.utils_0.1.0      stringi_1.8.4
+[47] plotrix_3.8-4          permute_0.9-7
+[49] boot_1.3-30            rlang_1.1.3
+[51] pkgconfig_2.0.3        bitops_1.0-7
+[53] polysat_1.7-7          lattice_0.21-8
+[55] treeio_1.22.0          patchwork_1.2.0.9000
+[57] tidyselect_1.2.1       plyr_1.8.8
+[59] magrittr_2.0.3         R6_2.5.1
+[61] generics_0.1.3         sna_2.7-2
+[63] pillar_1.9.0           withr_3.0.0
+[65] mgcv_1.9-0             survival_3.5-7
+[67] RCurl_1.98-1.12        crayon_1.5.2
+[69] utf8_1.2.4             tzdb_0.4.0
+[71] grid_4.2.2             vegan_2.6-6.1
+[73] digest_0.6.33          xtable_1.8-4
+[75] httpuv_1.6.12          gridGraphics_0.5-1
+[77] munsell_0.5.1          ggplotify_0.1.2
+[79] quadprog_1.5-8
 #+end_example
 
 ** Load metadata and color
@@ -200,7 +199,7 @@ meta.counts <- mapply(left_join,
 ** Load and trim alignment (w/ outgroup)
 #+begin_src R
 fasta.with_outgroup <-
-  read.dna("1-mafft.fasta", format='fasta', as.matrix=T)
+  read.dna("1-mafft.fasta.gz", format='fasta', as.matrix=T)
 fasta.with_outgroup
 #+end_src
 
@@ -320,9 +319,9 @@ haplotypes.with_outgroup@freq %>%
 #+RESULTS:
 #+begin_example
 Size Count
-1      1    52
-2      2     7
-3      3     4
+1      1    53
+2      2     8
+3      3     3
 4      4     3
 5      5     1
 6      9     1
@@ -332,7 +331,7 @@ Size Count
 10    54     1
 11    70     1
 12   198     1
-13 Total    74
+13 Total    75
 #+end_example
 
 Rename haplotypes mtCR-new, mtCR-mix, and mtCR-pub for haplotypes containing only new sequences, mix of published and new, and only published.
@@ -403,7 +402,7 @@ data.frame(Haplotype=names(haplotypes.with_outgroup@hapind),
 | mtCR.mix  |    12 | [2 - 198] |
 | mtCR.new  |     8 | [1 - 3]   |
 | mtCR.out  |     2 | [1 - 1]   |
-| mtCR.pub  |    52 | [1 - 4]   |
+| mtCR.pub  |    53 | [1 - 4]   |
 :end:
 
 Published vs New haplotype overlap
@@ -1018,19 +1017,8 @@ lapply(pegas.haps.split, pegas::nuc.div, variance = T) %>%
   | mtCR.inner | 0.0071 | 2.026e-05 |
   | mtCR.outer | 0.0081 | 2.430e-05 |
   | mtCR.ocean | 0.0087 | 2.818e-05 |
-  Warning message:
-  In ff * D : longer object length is not a multiple of shorter object length
   :end:
 
-  :results:
-  | Population |     pi |       var |
-  |------------+--------+-----------|
-  | all        | 0.0082 | 2.278e-05 |
-  | mtCR.sound | 0.0037 | 6.681e-06 |
-  | mtCR.inner | 0.0071 | 2.026e-05 |
-  | mtCR.outer | 0.0083 | 2.536e-05 |
-  | mtCR.ocean | 0.0087 | 2.818e-05 |
-  :end:
 
 3) Population differentiation (Fst)
 
@@ -1038,14 +1026,12 @@ lapply(pegas.haps.split, pegas::nuc.div, variance = T) %>%
 pop <- select(haplotype.membership, best.pop, ID) %>%
   unique() %>%
   pull(best.pop, name=ID) %>%
-  as.character() %>%
   na.omit()
-table(pop)
 
 genind <- haplotypes.with_outgroup %>%
   as.dna %>%
   haplotypes::as.DNAbin(.) %>%
-  .[!grepl("mtCR.out", labels(.)),] %>%
+  .[names(pop),] %>%
   DNAbin2genind(., pop=pop)
 strata(genind) <- data.frame(pop)
 
@@ -1070,22 +1056,78 @@ rbind(c('all', 'all', all$FST, NA, use.names = F), pair)
 
   #+RESULTS:
   #+begin_example
-  pop
-  mtCR.inner mtCR.ocean mtCR.outer mtCR.sound
-          11         15         17         29
   PopA       PopB        Fst  class
-  1 mtCR.inner mtCR.sound 0.03491665 little
+  1 mtCR.inner mtCR.sound 0.02959451 little
   PopA       PopB        Fst    class
-  4 mtCR.inner mtCR.ocean 0.09022254 moderate
+  3 mtCR.ocean mtCR.sound 0.08674937 moderate
   PopA       PopB                Fst    class
-  1        all        all 0.0736455401213319     <NA>
-  2 mtCR.inner mtCR.sound 0.0349166503050042   little
-  3 mtCR.ocean mtCR.sound 0.0878138253249457 moderate
-  4 mtCR.outer mtCR.sound  0.084389566389464 moderate
-  5 mtCR.inner mtCR.ocean 0.0902225441714691 moderate
-  6 mtCR.inner mtCR.outer 0.0775021813417108 moderate
-  7 mtCR.ocean mtCR.outer 0.0643913887816393 moderate
+  1        all        all 0.0626964833244778     <NA>
+  2 mtCR.inner mtCR.sound 0.0295945058579385   little
+  3 mtCR.outer mtCR.sound 0.0666894153068046 moderate
+  4 mtCR.ocean mtCR.sound 0.0867493738144138 moderate
+  5 mtCR.inner mtCR.outer 0.0392497681809421   little
+  6 mtCR.ocean mtCR.outer  0.058010930165625 moderate
+  7 mtCR.inner mtCR.ocean 0.0772601753639797 moderate
   #+end_example
+
+        Vollmer 2017
+        #+begin_src R
+
+gomx.pop <- filter(meta.counts, Set == '2017') %>%
+  filter(!grepl("not submitted", ID)) %>%
+  select(ID, Group,count) %>%
+  arrange(count) %>%
+  group_by(ID) %>%
+  summarise(Group=Group[1]) %>%
+  pull(Group, name=ID)
+
+gomx.genind <-
+  fasta.with_outgroup.trimmed.fixed[names(gomx.pop),] %>%
+  DNAbin2genind(., pop=gomx.pop)
+strata(gomx.genind) <- data.frame(gomx.pop)
+
+all <- wc(gomx.genind)
+pair <- pairwise.WCfst(gomx.genind) %>%
+  as.data.frame %>%
+  rownames_to_column("PopA") %>%
+  gather(-PopA, key="PopB", value="Fst") %>%
+  filter(PopA < PopB) %>%
+  mutate(class = cut(Fst, breaks=c(0,0.05,0.15,0.25,1),
+                     labels=c("little", "moderate", "great",
+                              "very great"))) %>%
+  arrange(Fst)
+
+rbind(c('all', 'all', all$FST, NA, use.names = F), pair)
+
+
+        #+end_src
+
+        #+RESULTS:
+        #+begin_example
+        PopA       PopB                  Fst    class
+        1         all        all   0.0346798487346921     <NA>
+        2  NE.oceanic NW.Oceanic -0.00930316834508333     <NA>
+        3   E.oceanic NE.oceanic -0.00666222500357931     <NA>
+        4   E.oceanic NW.Oceanic -0.00482718671558216     <NA>
+        5     E.inner   NW.outer -0.00442445985572923     <NA>
+        6     E.outer   NW.outer  0.00285081810761297   little
+        7     E.inner    E.outer    0.002934061540755   little
+        8  NE.oceanic   NW.outer  0.00828623063021494   little
+        9  NW.Oceanic   NW.outer   0.0131350563326384   little
+        10    E.outer NE.oceanic   0.0183509278306607   little
+        11  E.oceanic   NW.outer   0.0224166868010573   little
+        12    E.outer NW.Oceanic   0.0226599451116258   little
+        13    E.inner NE.oceanic   0.0248520152877038   little
+        14    E.outer   NW.inner   0.0249295981965315   little
+        15  E.oceanic    E.outer   0.0273295615362439   little
+        16    E.inner NW.Oceanic   0.0286396181384248   little
+        17    E.inner   NW.inner   0.0286479572584718   little
+        18    E.inner  E.oceanic   0.0402504054447634   little
+        19   NW.inner   NW.outer   0.0474273259902999   little
+        20 NE.oceanic   NW.inner   0.0728757059146141 moderate
+        21   NW.inner NW.Oceanic   0.0777732899718429 moderate
+        22  E.oceanic   NW.inner   0.0837974528991448 moderate
+        #+end_example
 
 4) PhiST
    - Global
@@ -1098,10 +1140,10 @@ phistp
     #+RESULTS:
     #+begin_example
     Filtering ...
-    Original multilocus genotypes   ... 73
-    Contracted multilocus genotypes ... 73
+    Original multilocus genotypes   ... 72
+    Contracted multilocus genotypes ... 72
 
-    Found 90 missing values.
+    Found 86 missing values.
 
     2 loci contained missing values greater than 5%
 
@@ -1113,19 +1155,19 @@ phistp
 
     $results
                     Df   Sum Sq    Mean Sq
-    Between samples  3 405.0490 135.016322
-    Within samples  69 219.2688   3.177809
-    Total           72 624.3178   8.671081
+    Between samples  3 344.7787 114.926229
+    Within samples  68 271.4971   3.992604
+    Total           71 616.2758   8.679940
 
     $componentsofcovariance
-                                    Sigma        %
-    Variations  Between samples  7.562240  70.4116
-    Variations  Within samples   3.177809  29.5884
-    Total variations            10.740050 100.0000
+                                    Sigma         %
+    Variations  Between samples  6.462153  61.81065
+    Variations  Within samples   3.992604  38.18935
+    Total variations            10.454757 100.00000
 
     $statphi
-                           Phi
-    Phi-samples-total 0.704116
+                            Phi
+    Phi-samples-total 0.6181065
     #+end_example
 
 
@@ -1156,30 +1198,19 @@ phist.table <- expand_grid(pop1=levels(pop),
     #+RESULTS:
     #+begin_example
     pop
-    mtCR.inner mtCR.ocean mtCR.outer mtCR.sound
-            11         15         18         29
-    Filtering ...
-    Original multilocus genotypes   ... 11
-    Contracted multilocus genotypes ... 11
-
-     No missing values detected.
-
-    Filtering ...
-    Original multilocus genotypes   ... 26
-    Contracted multilocus genotypes ... 26
-
-    Found 15 missing values.
-
-    1 locus contained missing values greater than 5%
-
-    Removing 1 locus: , 123
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
+    mtCR.sound mtCR.inner mtCR.outer mtCR.ocean
+            29         11         17         15
     Filtering ...
     Original multilocus genotypes   ... 29
     Contracted multilocus genotypes ... 29
 
-    Found 42 missing values.
+     No missing values detected.
+
+    Filtering ...
+    Original multilocus genotypes   ... 40
+    Contracted multilocus genotypes ... 40
+
+    Found 8 missing values.
 
     2 loci contained missing values greater than 5%
 
@@ -1187,125 +1218,149 @@ phist.table <- expand_grid(pop1=levels(pop),
     Distance matrix is non-euclidean.
     Using quasieuclid correction method. See ?quasieuclid for details.
     Filtering ...
-    Original multilocus genotypes   ... 40
-    Contracted multilocus genotypes ... 40
+    Original multilocus genotypes   ... 46
+    Contracted multilocus genotypes ... 46
 
-     No missing values detected.
+    Found 48 missing values.
 
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
     Filtering ...
-    Original multilocus genotypes   ... 26
-    Contracted multilocus genotypes ... 26
+    Original multilocus genotypes   ... 44
+    Contracted multilocus genotypes ... 44
 
-    Found 15 missing values.
+    Found 30 missing values.
 
     1 locus contained missing values greater than 5%
 
     Removing 1 locus: , 123
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 40
+    Contracted multilocus genotypes ... 40
+
+    Found 8 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 11
+    Contracted multilocus genotypes ... 11
+
+    Found 6 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 28
+
+    Found 39 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 26
+    Contracted multilocus genotypes ... 26
+
+    Found 21 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 46
+    Contracted multilocus genotypes ... 46
+
+    Found 48 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 28
+    Contracted multilocus genotypes ... 28
+
+    Found 39 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 17
+    Contracted multilocus genotypes ... 17
+
+    Found 33 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 32
+
+    Found 48 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 44
+    Contracted multilocus genotypes ... 44
+
+    Found 30 missing values.
+
+    1 locus contained missing values greater than 5%
+
+    Removing 1 locus: , 123
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 26
+    Contracted multilocus genotypes ... 26
+
+    Found 21 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
+    Distance matrix is non-euclidean.
+    Using quasieuclid correction method. See ?quasieuclid for details.
+    Filtering ...
+    Original multilocus genotypes   ... 32
+    Contracted multilocus genotypes ... 32
+
+    Found 48 missing values.
+
+    2 loci contained missing values greater than 5%
+
+    Removing 2 loci: 123, 275
     Distance matrix is non-euclidean.
     Using quasieuclid correction method. See ?quasieuclid for details.
     Filtering ...
     Original multilocus genotypes   ... 15
     Contracted multilocus genotypes ... 15
-
-     No missing values detected.
-
-    Filtering ...
-    Original multilocus genotypes   ... 33
-    Contracted multilocus genotypes ... 33
-
-    Found 24 missing values.
-
-    1 locus contained missing values greater than 5%
-
-    Removing 1 locus: , 275
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 44
-    Contracted multilocus genotypes ... 44
-
-    Found 30 missing values.
-
-    1 locus contained missing values greater than 5%
-
-    Removing 1 locus: , 123
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 29
-    Contracted multilocus genotypes ... 29
-
-    Found 42 missing values.
-
-    2 loci contained missing values greater than 5%
-
-    Removing 2 loci: 123, 275
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 33
-    Contracted multilocus genotypes ... 33
-
-    Found 24 missing values.
-
-    1 locus contained missing values greater than 5%
-
-    Removing 1 locus: , 275
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 18
-    Contracted multilocus genotypes ... 18
-
-    Found 12 missing values.
-
-    1 locus contained missing values greater than 5%
-
-    Removing 1 locus: , 275
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 47
-    Contracted multilocus genotypes ... 47
-
-    Found 60 missing values.
-
-    2 loci contained missing values greater than 5%
-
-    Removing 2 loci: 123, 275
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 40
-    Contracted multilocus genotypes ... 40
-
-     No missing values detected.
-
-    Filtering ...
-    Original multilocus genotypes   ... 44
-    Contracted multilocus genotypes ... 44
-
-    Found 30 missing values.
-
-    1 locus contained missing values greater than 5%
-
-    Removing 1 locus: , 123
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 47
-    Contracted multilocus genotypes ... 47
-
-    Found 60 missing values.
-
-    2 loci contained missing values greater than 5%
-
-    Removing 2 loci: 123, 275
-    Distance matrix is non-euclidean.
-    Using quasieuclid correction method. See ?quasieuclid for details.
-    Filtering ...
-    Original multilocus genotypes   ... 29
-    Contracted multilocus genotypes ... 29
 
      No missing values detected.
     #+end_example
@@ -1328,18 +1383,18 @@ phist.table %>%
     :results:
     |    | pop1       | pop2       | phist.all |  phist |
     |----+------------+------------+-----------+--------|
-    |  1 | mtCR.inner | mtCR.sound |    0.5338 | 0.5338 |
-    |  2 | mtCR.sound | mtCR.inner |    0.5338 | 0.5338 |
-    |  3 | mtCR.ocean | mtCR.outer |    0.6630 | 0.6630 |
-    |  4 | mtCR.outer | mtCR.ocean |    0.6630 | 0.6630 |
-    |  5 | mtCR.inner | mtCR.outer |    0.6954 | 0.6954 |
-    |  6 | mtCR.outer | mtCR.inner |    0.6954 | 0.6954 |
-    |  7 | mtCR.outer | mtCR.sound |    0.7328 | 0.7328 |
-    |  8 | mtCR.sound | mtCR.outer |    0.7328 | 0.7328 |
-    |  9 | mtCR.inner | mtCR.ocean |    0.7405 | 0.7405 |
-    | 10 | mtCR.ocean | mtCR.inner |    0.7405 | 0.7405 |
-    | 11 | mtCR.ocean | mtCR.sound |    0.7540 | 0.7540 |
-    | 12 | mtCR.sound | mtCR.ocean |    0.7540 | 0.7540 |
+    |  1 | mtCR.inner | mtCR.outer |    0.4239 | 0.4239 |
+    |  2 | mtCR.outer | mtCR.inner |    0.4239 | 0.4239 |
+    |  3 | mtCR.inner | mtCR.sound |    0.4402 | 0.4402 |
+    |  4 | mtCR.sound | mtCR.inner |    0.4402 | 0.4402 |
+    |  5 | mtCR.ocean | mtCR.outer |    0.5878 | 0.5878 |
+    |  6 | mtCR.outer | mtCR.ocean |    0.5878 | 0.5878 |
+    |  7 | mtCR.outer | mtCR.sound |    0.6434 | 0.6434 |
+    |  8 | mtCR.sound | mtCR.outer |    0.6434 | 0.6434 |
+    |  9 | mtCR.inner | mtCR.ocean |    0.6534 | 0.6534 |
+    | 10 | mtCR.ocean | mtCR.inner |    0.6534 | 0.6534 |
+    | 11 | mtCR.ocean | mtCR.sound |    0.7442 | 0.7442 |
+    | 12 | mtCR.sound | mtCR.ocean |    0.7442 | 0.7442 |
     :end:
 
    - Private alleles
@@ -1355,38 +1410,35 @@ colSums(private.alleles > 0)
 
    #+RESULTS:
    :results:
-   |    | POS   | mtCR.inner | mtCR.sound | mtCR.ocean | mtCR.outer |
+   |    | POS   | mtCR.sound | mtCR.inner | mtCR.outer | mtCR.ocean |
    |----+-------+------------+------------+------------+------------|
-   |  1 | 23.g  |          0 |          0 |          1 |          0 |
-   |  2 | 26.g  |          0 |          1 |          0 |          0 |
-   |  3 | 27.t  |         10 |          0 |          0 |          0 |
-   |  4 | 32.c  |          0 |          0 |         15 |          0 |
-   |  5 | 33.t  |          1 |          0 |          0 |          0 |
-   |  6 | 64.a  |          2 |          0 |          0 |          0 |
-   |  7 | 73.c  |          0 |          2 |          0 |          0 |
-   |  8 | 101.g |          1 |          0 |          0 |          0 |
-   |  9 | 104.t |          0 |          1 |          0 |          0 |
-   | 10 | 105.g |          0 |          0 |          0 |         11 |
-   | 11 | 106.t |          0 |          1 |          0 |          0 |
-   | 12 | 110.c |          0 |          0 |         15 |          0 |
-   | 13 | 116.t |          1 |          0 |          0 |          0 |
-   | 14 | 117.c |          0 |          0 |          1 |          0 |
-   | 15 | 119.g |          0 |         29 |          0 |          0 |
-   | 16 | 123.c |          0 |          1 |          0 |          0 |
-   | 17 | 213.g |          1 |          0 |          0 |          0 |
-   | 18 | 216.c |          1 |          0 |          0 |          0 |
-   | 19 | 249.a |          0 |          0 |          0 |          1 |
-   | 20 | 252.t |          0 |          0 |          2 |          0 |
-   | 21 | 265.c |          0 |          0 |          1 |          0 |
-   | 22 | 266.a |          0 |          0 |          0 |         18 |
-   | 23 | 273.g |          0 |          2 |          0 |          0 |
-   | 24 | 274.c |          0 |          0 |          0 |          2 |
-   | 25 | 278.c |          0 |          1 |          0 |          0 |
-   | 26 | 283.g |          0 |          1 |          0 |          0 |
-   | 27 | 291.g |          1 |          0 |          0 |          0 |
-   | 28 | 294.c |          1 |          0 |          0 |          0 |
-   | 29 | 295.t |          0 |          0 |          0 |          1 |
-   | 30 | 306.c |          0 |          0 |          0 |          1 |
-          POS mtCR.inner mtCR.sound mtCR.ocean mtCR.outer
-           30          9          9          6          6
+   |  1 | 23.g  |          0 |          0 |          0 |          1 |
+   |  2 | 26.g  |          1 |          0 |          0 |          0 |
+   |  3 | 32.c  |          0 |          0 |          0 |         15 |
+   |  4 | 33.t  |          0 |          1 |          0 |          0 |
+   |  5 | 64.a  |          0 |          2 |          0 |          0 |
+   |  6 | 73.c  |          2 |          0 |          0 |          0 |
+   |  7 | 101.g |          0 |          1 |          0 |          0 |
+   |  8 | 104.t |          1 |          0 |          0 |          0 |
+   |  9 | 106.t |          1 |          0 |          0 |          0 |
+   | 10 | 110.c |          0 |          0 |          0 |         15 |
+   | 11 | 116.t |          0 |          1 |          0 |          0 |
+   | 12 | 117.c |          0 |          0 |          0 |          1 |
+   | 13 | 123.c |          1 |          0 |          0 |          0 |
+   | 14 | 213.g |          0 |          1 |          0 |          0 |
+   | 15 | 216.c |          0 |          1 |          0 |          0 |
+   | 16 | 235.c |          0 |          0 |          2 |          0 |
+   | 17 | 249.a |          0 |          0 |          1 |          0 |
+   | 18 | 252.t |          0 |          0 |          0 |          2 |
+   | 19 | 265.c |          0 |          0 |          0 |          1 |
+   | 20 | 273.g |          2 |          0 |          0 |          0 |
+   | 21 | 274.c |          0 |          0 |          2 |          0 |
+   | 22 | 278.c |          1 |          0 |          0 |          0 |
+   | 23 | 283.g |          1 |          0 |          0 |          0 |
+   | 24 | 291.g |          0 |          1 |          0 |          0 |
+   | 25 | 294.c |          1 |          0 |          0 |          0 |
+   | 26 | 295.t |          0 |          0 |          1 |          0 |
+   | 27 | 306.c |          0 |          0 |          1 |          0 |
+   POS mtCR.sound mtCR.inner mtCR.outer mtCR.ocean
+           27          9          7          5          6
    :end:

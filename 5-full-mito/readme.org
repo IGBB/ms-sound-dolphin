@@ -168,7 +168,7 @@ image.DNAbin(fasta.full)
 
 #+RESULTS:
 [[file:alignment.png]]
-** COMMENT Haplotypes
+** Haplotypes
 #+begin_src R :results silent
 haplotypes.full <- as.dna(fasta.full ) %>%
   haplotype(indel='missing')
