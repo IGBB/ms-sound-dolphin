@@ -885,6 +885,74 @@ anno %>%
 #+RESULTS:
 [[file:haplotype-pop-membership-barchart.png]]
 
+#+begin_src R
+library(tidyverse)
+
+read.delim("haplotype.published-groups.txt") %>%
+  replace_na(list(count=1)) %>%
+  mutate(Group = factor(Group, c('NW.inner', 'E.inner', 'NW.outer',
+                                 'E.outer', 'NW.Oceanic', 'NE.oceanic',
+                                 'E.oceanic', 'green', 'blue', "New")),
+         best.pop = factor(best.pop, c("mtCR.sound","mtCR.inner",
+                                       "mtCR.outer","mtCR.ocean"))) %>%
+  group_by(Set, Group, best.pop) %>%
+  summarise(samples=sum(count), haplotypes=n()) %>%
+  pivot_wider(id_cols=c("Set", "Group"),
+              values_from = c("samples", "haplotypes"),
+              names_from = c("best.pop"),
+              names_vary = 'slowest',
+              values_fill = 0) %>%
+  split(., .$Set) %>%
+  lapply(as.data.frame)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+$`2017`
+   Set      Group samples_mtCR.sound haplotypes_mtCR.sound samples_mtCR.inner
+1 2017   NW.inner                159                    13                 22
+2 2017    E.inner                 21                     4                 45
+3 2017   NW.outer                  3                     1                  7
+4 2017    E.outer                  3                     3                  9
+5 2017 NW.Oceanic                  0                     0                  0
+6 2017 NE.oceanic                  0                     0                  0
+7 2017  E.oceanic                  0                     0                  0
+  haplotypes_mtCR.inner samples_mtCR.outer haplotypes_mtCR.outer
+1                     4                  0                     0
+2                     6                 16                     5
+3                     2                 66                     8
+4                     5                 23                     4
+5                     0                 26                     4
+6                     0                 22                     4
+7                     0                  8                     4
+  samples_mtCR.ocean haplotypes_mtCR.ocean
+1                  0                     0
+2                  0                     0
+3                 13                     3
+4                  3                     3
+5                 20                     4
+6                 47                     4
+7                 46                     7
+
+$`2021`
+   Set Group samples_mtCR.sound haplotypes_mtCR.sound samples_mtCR.inner
+1 2021 green                525                    14                  7
+2 2021  blue                  4                     4                 20
+  haplotypes_mtCR.inner samples_mtCR.outer haplotypes_mtCR.outer
+1                     2                  9                     2
+2                     6                 19                     4
+  samples_mtCR.ocean haplotypes_mtCR.ocean
+1                  0                     0
+2                  0                     0
+
+$New
+  Set Group samples_mtCR.sound haplotypes_mtCR.sound samples_mtCR.inner
+1 New   New                401                    18                  1
+  haplotypes_mtCR.inner samples_mtCR.outer haplotypes_mtCR.outer
+1                     1                  1                     1
+  samples_mtCR.ocean haplotypes_mtCR.ocean
+1                  0                     0
+#+end_example
 
 
 ** Phylogenetics tree

@@ -976,52 +976,188 @@ p
 ** Map
    #+header: :results output graphics file
    #+header: :file haplotype-map.png
-   #+header: :width 8 :height 8 :units in :res 100 :bg white
+   #+header: :width 9 :height 14 :units in :res 600 :bg white
    #+begin_src R
+library(tidyverse)
+library(hues)
+
+library(sf)
+library(ggspatial)
+library(stars)
+
+map.colors <- c(
+ "0" =rgb(193/255, 224/255, 250/255), ## Ocean water
+ "11"=rgb(193/255, 224/255, 250/255), ## Open water
+ "12"=rgb(229/255, 231/255, 232/255), ## Perennial ice / snow
+ "21"="#ebe5cf",                      ## Developed, open space
+ "22"="#ebe5cf",                      ## Developed, low intensity
+ "23"="#ebe5cf",                      ## Developed, medium intensity
+ "24"="#ebe5cf",                      ## Developed. high intensity
+ "31"=rgb(179/255, 175/255, 164/255), ## Barren land
+ "41"="#e4e8da",                      ## Deciduous forest
+ "42"="#e4e8da",                      ## Evergreen forest
+ "43"="#e4e8da",                      ## Mixed forest
+ "51"=rgb(176/255, 151/255,  61/255), ## Dwarf scrub  (Alaska only)
+ "52"="#f4f3ee",   ## Shrub / scrub
+ "71"="#f4f3ee",   ## Grassland / herbaceous
+ "72"=rgb(209/255, 209/255, 130/255), ## Sedge / herbaceous  (Alaska only)
+ "74"=rgb(130/255, 186/255, 158/255), ## Moss (Alaska only)
+ "81"="#f4f3ee",   ## Pasture hay
+ "82"="#f4f3ee",   ## Cultivated crops
+ "90"="#e4e8da",   ## Woody wetlands
+ "101"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+ "102"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+ "103"=rgb(240/255, 235/255, 211/255)   ## Non-U.S. land
+)
+
+
+
+sequence.membership.hap <-
+  read.delim("3-structure-membership.K4.txt")
 map.data <-
   data.table::fread("../2-samples/bigtable.tsv", skip=2)  %>%
   separate(`Latitude/Longitude`, into=c('lat', 'lon', NA),
            sep="[NW]") %>%
   mutate(lat = as.numeric(lat),
          lon=as.numeric(lon) * -1) %>%
-  select(Sample="Sample Name", lat, lon) %>%
+  dplyr::select(Sample="Sample Name", lat, lon) %>%
   right_join(sequence.membership.hap) %>%
   mutate(Population = factor(Population),
          Haplotype = fct_lump_min(Haplotype, min=1,
                                   other_level="Singleton"))
+# Transform GPS to Albers_NAD83_L48
+map.data.prj <- st_as_sf(map.data,
+                         coords = c('lon', 'lat'),
+                         crs=4326) %>%
+  st_transform(5070) %>%
+  st_coordinates(.$geometry) %>%
+  cbind(map.data)
+
+map.data.bbox <- st_as_sf(map.data,
+                          coords = c('lon', 'lat'),
+                          crs=4326) %>%
+  st_transform(5070) %>%
+  st_bbox()
+map.data.bbox <- map.data.bbox -
+  c(1000, 25000, 0, 0) + c(0,0,30000,1000)
+map.data.bbox
+
+# Download National Map Data
+## Crop National map to region of interest
+TNM <- read_stars("ldco48i0100a.tif_nt00971/ldco48i0100a.tif") %>%
+  st_crop(map.data.bbox)
+#plot(TNM)
+
+##download.file("http://www2.census.gov/geo/tiger/GENZ2015/shp/cb_2015_us_state_500k.zip", destfile = "states.zip")
+##unzip("states.zip")
+state <- read_sf("cb_2015_us_state_500k.shp") %>%
+  st_transform(5070) %>%
+  st_crop(map.data.bbox)
 
 
 
-bound.lat <- range(map.data$lat, na.rm=T)
-bound.lon <- range(map.data$lon, na.rm=T)
+## Locations based on TNM
+## Pensacola - -87.217, 30.421
+## Lake Borgne -  -89.625, 30.042
+## Pearl River - -89.629 30.277
+## Biloxi, MS. - -88.889 60.407
+## Scale and compass
+## data.frame(
+## name=c("Pensacola", "Lake Borgne", "Pearl River", "Biloxi, MS.", "label"),
+## lon = c(-87.217, -89.625 ,-89.629 ,-88.889, -88.0247),
+## lat = c(30.421, 30.042, 30.277, 30.407, 30.109)
+## ) %>% st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
+##   st_transform(5070)
+## Projected CRS: NAD83 / Conus Albers
+##          name                  geometry
+## 1   Pensacola POINT (841011.5 855006.9)
+## 2 Lake Borgne POINT (613666.9 794626.7)
+## 3 Pearl River POINT (611534.9 820629.7)
+## 4 Biloxi, MS. POINT (681360.5 840064.4)
+## 5       label POINT (766765.4 813664.9)
 
-usa <- map_data("state", region=c("mississippi",
-                                   "alabama",
-                                   "louisiana",
-                                   "florida"))
+map.data.prj.split <- split(map.data.prj, map.data.prj$Population)
+plots <- mapply(function(d,name,color){
+  ggplot(d) +
+    geom_stars(data=TNM, downsample = 1) +
+    scale_fill_manual(values=map.colors, na.value = "#f3f2ed") +
+    ## STATES
+    annotate(geom = "text", x = 660000, y = 855000,
+             label = "Mississippi",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             alpha=0.25) +
+    annotate(geom = "text", x = 780000, y = 855000,
+             label = "Alabama",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             alpha=0.25) +
+    ## CITES
+    annotate(geom = "text", x = 681361, y = 840064,
+             label = "Biloxi",
+             family="ETBembo",
+             color = "grey22",
+             size = 4,
+             hjust = 1) +
+    annotate(geom = "text", x = 841012, y = 855007,
+             label = "Pensacola, FL",
+             family="ETBembo",
+             color = "grey22",
+             size = 4,
+             hjust = 1) +
+    ## LAKE
+    annotate(geom = "text", x = 613667, y = 794627,
+             label = "Lake\nBorgne",
+             fontface = "italic",
+             family="ETBembo",
+             color = "#0a71b3",
+             size = 4) +
+    ## RIVER
+    annotate(geom = "text", x = 611535, y = 820630,
+             label = "Pearl River",
+             family="ETBembo",
+             color = "#0a71b3",
+             size = 4,
+             angle=-65,
+             vjust =0,
+             hjust =0.4 ) +
+    geom_sf(data = state, fill=NA, linetype='dotted', linewidth=0.2) +
+    geom_point(aes(x=X, y=Y, color=Population), size=1, color=color) +
+    coord_sf(expand = F) +
+    ggtitle(name) +
+    theme(panel.grid.major = element_line(color = gray(.25),
+                                          linetype = "dashed",
+                                          linewidth = 0.1),
+          legend.position = 'none',
+          axis.title=element_blank())
+}, map.data.prj.split,
+   names(map.data.prj.split),
+   iwanthue(4),
+   SIMPLIFY=F)
+plots[[1]] = plots[[1]] +
+    ## LABEL
+  annotate(geom = "text", x = 775000, y = 800000,
+           label = "North Central\nGulf of Mexico",
+           fontface = "italic",
+           family="ETBembo",
+           color = "#0a71b3",
+           size = 10) +
+  annotation_scale(location = "br", width_hint = 0.25) +
+  annotation_north_arrow(location = "br", which_north = "true",
+                         pad_x = unit(0.75, "in"),
+                         pad_y = unit(0.5, "in"),
+                         style = north_arrow_fancy_orienteering)
+cowplot::plot_grid(plotlist = plots, ncol = 1)
 
 
-map.plot <- ggplot(map.data)+
-    geom_polygon(aes(long, lat, fill=region), usa, alpha=0.5) +
-    geom_point(aes(lon, lat, color=Population, shape=),
-               alpha=0.7, size=1) +
-    stat_ellipse(aes(lon, lat, color=Population,
-                     group=Population),
-                 type="euclid", level=0.01) +
-  scale_fill_brewer(palette = "Pastel1") +
-  scale_color_iwanthue() +
-  coord_quickmap(xlim= bound.lon, ylim=bound.lat, expand=F) +
-  facet_wrap(~Population, ncol=1) +
-  theme_minimal() +
-  theme(legend.position = 'none',
-        axis.title=element_blank())
-map.plot
    #+end_src
-
+ 
    #+RESULTS:
    [[file:haplotype-map.png]]
 
-*** COMMENT Is the stranding area of group 2 significant
+*** Is the stranding area of group 2 significant
 #+begin_src R
 library(boot)
 
