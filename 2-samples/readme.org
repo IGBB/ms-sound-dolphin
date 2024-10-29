@@ -130,3 +130,189 @@ read.table("2-coverage.tbl") %>%
      :       Type       P4       P6       P7      P10
      : 1 Complete 242.5777 315.1386 556.4922 413.4870
      : 2  Partial 145.5758 395.4091 384.1515 385.8939
+
+
+
+** Collection Area
+   #+header: :results output graphics file
+   #+header: :file sample-area-map.tiff
+   #+header: :width 1200 :height 800 :units px :res 100 :bg white
+   #+begin_src R
+library(tidyverse)
+library(hues)
+
+library(sf)
+library(ggspatial)
+library(stars)
+
+map.colors <- c(
+ "0" =rgb(193/255, 224/255, 250/255), ## Ocean water
+ "11"=rgb(193/255, 224/255, 250/255), ## Open water
+ "12"=rgb(229/255, 231/255, 232/255), ## Perennial ice / snow
+ "21"="#ebe5cf",                      ## Developed, open space
+ "22"="#ebe5cf",                      ## Developed, low intensity
+ "23"="#ebe5cf",                      ## Developed, medium intensity
+ "24"="#ebe5cf",                      ## Developed. high intensity
+ "31"=rgb(179/255, 175/255, 164/255), ## Barren land
+ "41"="#e4e8da",                      ## Deciduous forest
+ "42"="#e4e8da",                      ## Evergreen forest
+ "43"="#e4e8da",                      ## Mixed forest
+ "51"=rgb(176/255, 151/255,  61/255), ## Dwarf scrub  (Alaska only)
+ "52"="#f4f3ee",   ## Shrub / scrub
+ "71"="#f4f3ee",   ## Grassland / herbaceous
+ "72"=rgb(209/255, 209/255, 130/255), ## Sedge / herbaceous  (Alaska only)
+ "74"=rgb(130/255, 186/255, 158/255), ## Moss (Alaska only)
+ "81"="#f4f3ee",   ## Pasture hay
+ "82"="#f4f3ee",   ## Cultivated crops
+ "90"="#e4e8da",   ## Woody wetlands
+ "101"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+ "102"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+ "103"=rgb(240/255, 235/255, 211/255)   ## Non-U.S. land
+)
+
+
+
+map.data.bbox <-
+  data.table::fread("bigtable.tsv", skip=2)  %>%
+  separate(`Latitude/Longitude`, into=c('lat', 'lon', NA),
+           sep="[NW]") %>%
+  mutate(lat = as.numeric(lat),
+         lon=as.numeric(lon) * -1) %>%
+  dplyr::select(Sample="Sample Name", lat, lon) %>%
+  ## Transform GPS to Albers_NAD83_L48
+  st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
+  st_transform(5070) %>%
+  st_bbox()
+map.data.bbox <- map.data.bbox -
+  c(10000, 70000, 0, 0) + c(0,0,30000,25000)
+map.data.bbox
+# Download National Map Data
+## Crop National map to region of interest
+TNM <- read_stars("../5-full-mito/ldco48i0100a.tif_nt00971/ldco48i0100a.tif") %>%
+  st_crop(map.data.bbox)
+plot(TNM)
+
+##download.file("http://www2.census.gov/geo/tiger/GENZ2015/shp/cb_2015_us_state_500k.zip", destfile = "states.zip")
+##unzip("states.zip")
+state <- read_sf("../5-full-mito/cb_2015_us_state_500k.shp") %>%
+  st_transform(5070) %>%
+  st_crop(map.data.bbox)
+
+
+
+## Locations based on TNM
+## Pensacola - -87.217, 30.421
+## Lake Borgne -  -89.625, 30.042
+## Pearl River - -89.629 30.277
+## Biloxi, MS. - -88.889 60.407
+## Scale and compass
+## data.frame(
+## name=c("Pensacola", "Lake Borgne", "Pearl River", "Biloxi, MS.", "label"),
+## lon = c(-87.217, -89.625 ,-89.629 ,-88.889, -88.0247),
+## lat = c(30.421, 30.042, 30.277, 30.407, 30.109)
+## ) %>% st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
+##   st_transform(5070)
+## Projected CRS: NAD83 / Conus Albers
+##          name                  geometry
+## 1   Pensacola POINT (841011.5 855006.9)
+## 2 Lake Borgne POINT (613666.9 794626.7)
+## 3 Pearl River POINT (611534.9 820629.7)
+## 4 Biloxi, MS. POINT (681360.5 840064.4)
+## 5       label POINT (766765.4 813664.9)
+
+data <- rbind(
+  c("Sound",  "Mobile\nBay",        -88.003, 30.421, "italic"),
+  c("Sound",  "Mississippi Sound",  -88.898, 30.317, "italic"),
+  c("Sound",  "Chandeleur\nSound",  -89.043, 29.908, "italic"),
+  c("Sound",  "Breton\nSound",      -89.302, 29.586, "italic"),
+  c("City",   "Biloxi",             -88.889, 30.407, "plain"),
+  c("City",   "Mobile",             -87.994, 30.681, "plain"),
+  c("City",   "Pensacola",          -87.217, 30.421, "plain"),
+  c("Island", "Cat\nIsland",         -89.085, 30.220, "plain"),
+  c("Island", "Ship\nIsland",        -88.910, 30.223, "plain"),
+  c("Island", "Horn\nIsland",        -88.662, 30.244, "plain"),
+  c("Island", "Petit Bois\nIsland",  -88.432, 30.207, "plain"),
+  c("Island", "Dauphin\nIsland",     -88.122, 30.248, "plain"),
+  c("Island", "Chandeleur\nIsland", -88.826, 29.843, "plain")
+  ) %>%
+  as.data.frame %>%
+  setNames(c("Type", "Name", "lon", "lat", "fontface")) %>%
+  st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
+  st_transform(5070) %>%
+  cbind(st_coordinates(.$geometry))
+data
+map.data.bbox
+  ggplot() +
+    geom_stars(data=TNM, downsample = 1) +
+    scale_fill_manual(values=map.colors, na.value = "#f3f2ed") +
+    ## STATES
+    annotate(geom = "text", x = 595000, y = 780000,
+             label = "Louisiana",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             angle=90,
+             alpha=0.25) +
+    annotate(geom = "text", x = 660000, y = 880000,
+             label = "Mississippi",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             alpha=0.25) +
+    annotate(geom = "text", x = 795000, y = 880000,
+             label = "Alabama",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             alpha=0.25) +
+    annotate(geom = "text", x = 840000, y = 880000,
+             label = "FL",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             alpha=0.25) +
+    geom_text(aes(X, Y, label=Name, size=Type, color=Type, fontface=fontface),
+              data=data, family="ETBembo", lineheight=0.75) +
+    scale_color_manual(values=c("Sound"="#0a71b3", "Island"="#0a71b3", "City"="black")) +
+    scale_size_manual(values=c("Sound"=6, "Island"=4, "City"=4)) +
+    ## LAKE
+    annotate(geom = "text", x = 613667, y = 794627,
+             label = "Lake\nBorgne",
+             fontface = "italic",
+             family="ETBembo",
+             color = "#0a71b3",
+             size = 4) +
+    ## RIVER
+    annotate(geom = "text", x = 611535, y = 820630,
+             label = "Pearl River",
+             family="ETBembo",
+             color = "#0a71b3",
+             size = 4,
+             angle=-65,
+             vjust =0,
+             hjust =0.4 ) +
+    geom_sf(data = state, fill=NA, linetype='dotted', linewidth=0.2) +
+    coord_sf(expand = F) +
+    theme(panel.grid.major = element_line(color = gray(.25),
+                                          linetype = "dashed",
+                                          linewidth = 0.1),
+          legend.position = 'none',
+          axis.title=element_blank()) +
+    ## LABEL
+  annotate(geom = "text", x = 775000, y = 775000,
+           label = "North Central\nGulf of Mexico",
+           fontface = "italic",
+           family="ETBembo",
+           color = "#0a71b3",
+           size = 13) +
+  annotation_scale(location = "br", width_hint = 0.25) +
+  annotation_north_arrow(location = "br", which_north = "true",
+                         pad_x = unit(0.75, "in"),
+                         pad_y = unit(0.5, "in"),
+                         style = north_arrow_fancy_orienteering)
+
+
+   #+end_src
+
+   #+RESULTS:
+   [[file:sample-area-map.tiff]]
