@@ -135,12 +135,11 @@ read.table("2-coverage.tbl") %>%
 
 ** Collection Area
    #+header: :results output graphics file
-   #+header: :file sample-area-map.tiff
+   #+header: :file sample-area-map.tiff :compression lzw
    #+header: :width 1200 :height 800 :units px :res 100 :bg white
    #+begin_src R
 library(tidyverse)
 library(hues)
-
 library(sf)
 library(ggspatial)
 library(stars)
@@ -172,15 +171,26 @@ map.colors <- c(
 
 
 
-map.data.bbox <-
+map.data <-
   data.table::fread("bigtable.tsv", skip=2)  %>%
   separate(`Latitude/Longitude`, into=c('lat', 'lon', NA),
            sep="[NW]") %>%
   mutate(lat = as.numeric(lat),
          lon=as.numeric(lon) * -1) %>%
-  dplyr::select(Sample="Sample Name", lat, lon) %>%
-  ## Transform GPS to Albers_NAD83_L48
-  st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
+  dplyr::select(Sample="Sample Name", lat, lon)
+
+map.data.prj <- st_as_sf(map.data,
+                         coords = c('lon', 'lat'),
+                         crs=4326) %>%
+  st_transform(5070) %>%
+  st_coordinates(.$geometry) %>%
+  cbind(map.data)
+map.data.prj
+
+
+map.data.bbox <- st_as_sf(map.data,
+                          coords = c('lon', 'lat'),
+                          crs=4326) %>%
   st_transform(5070) %>%
   st_bbox()
 map.data.bbox <- map.data.bbox -
@@ -239,7 +249,9 @@ data <- rbind(
   setNames(c("Type", "Name", "lon", "lat", "fontface")) %>%
   st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
   st_transform(5070) %>%
-  cbind(st_coordinates(.$geometry))
+  cbind(st_coordinates(.$geometry)) %>%
+  mutate(Y = ifelse(Type == "Island" & Name != "Chandeleur\nIsland",
+                    Y - 5000, Y))
 data
 map.data.bbox
   ggplot() +
@@ -292,6 +304,7 @@ map.data.bbox
              vjust =0,
              hjust =0.4 ) +
     geom_sf(data = state, fill=NA, linetype='dotted', linewidth=0.2) +
+    geom_point(aes(x=X, y=Y), data=map.data.prj, size=0.2, alpha=1) +
     coord_sf(expand = F) +
     theme(panel.grid.major = element_line(color = gray(.25),
                                           linetype = "dashed",
