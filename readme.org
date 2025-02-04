@@ -1,5 +1,5 @@
 #+TITLE: MS Sound Stranded Dolphins
-
+#+PROPERTY: header-args:R :session (doom-project-name)
 
  - [[./0-ref/readme.org][Reference Sequences]] :: Description, location, and download info for reference
    sequences used
@@ -11,3 +11,1274 @@
    SNP vcfs for each sample. Includes species validation and heterplasmy search.
  - [[./4-mtCR/readme.org][mtCR analysis]] :: Methods for comparing the mtCR region
  - [[./5-full-mito/readme.org][Whole mitogenome analysis]] :: Methods for comparing full mitogenomes.
+
+
+* Figures
+
+
+** Figure 1
+#+header: :results output graphics file
+#+header: :file fig-1.sample-area-map.tiff :compression lzw
+#+header: :width 1200 :height 800 :units px :res 100 :bg white
+#+begin_src R :exports both
+library(tidyverse)
+library(hues)
+library(sf)
+library(ggspatial)
+library(stars)
+
+map.colors <- c(
+  "0" =rgb(193/255, 224/255, 250/255), ## Ocean water
+  "11"=rgb(193/255, 224/255, 250/255), ## Open water
+  "12"=rgb(229/255, 231/255, 232/255), ## Perennial ice / snow
+  "21"="#ebe5cf",                      ## Developed, open space
+  "22"="#ebe5cf",                      ## Developed, low intensity
+  "23"="#ebe5cf",                      ## Developed, medium intensity
+  "24"="#ebe5cf",                      ## Developed. high intensity
+  "31"=rgb(179/255, 175/255, 164/255), ## Barren land
+  "41"="#e4e8da",                      ## Deciduous forest
+  "42"="#e4e8da",                      ## Evergreen forest
+  "43"="#e4e8da",                      ## Mixed forest
+  "51"=rgb(176/255, 151/255,  61/255), ## Dwarf scrub  (Alaska only)
+  "52"="#f4f3ee",   ## Shrub / scrub
+  "71"="#f4f3ee",   ## Grassland / herbaceous
+  "72"=rgb(209/255, 209/255, 130/255), ## Sedge / herbaceous  (Alaska)
+  "74"=rgb(130/255, 186/255, 158/255), ## Moss (Alaska only)
+  "81"="#f4f3ee",   ## Pasture hay
+  "82"="#f4f3ee",   ## Cultivated crops
+  "90"="#e4e8da",   ## Woody wetlands
+  "101"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+  "102"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+  "103"=rgb(240/255, 235/255, 211/255)   ## Non-U.S. land
+)
+
+map.data <-
+  data.table::fread("2-samples/bigtable.tsv", skip=2)  %>%
+  separate(`Latitude/Longitude`, into=c('lat', 'lon', NA),
+           sep="[NW]") %>%
+  mutate(lat = as.numeric(lat),
+         lon=as.numeric(lon) * -1) %>%
+  dplyr::select(Sample="Sample Name", lat, lon)
+
+map.data.prj <- st_as_sf(map.data,
+                         coords = c('lon', 'lat'),
+                         crs=4326) %>%
+  st_transform(5070) %>%
+  st_coordinates(.$geometry) %>%
+  cbind(map.data)
+map.data.prj
+
+
+map.data.bbox <- st_as_sf(map.data,
+                          coords = c('lon', 'lat'),
+                          crs=4326) %>%
+  st_transform(5070) %>%
+  st_bbox()
+map.data.bbox <- map.data.bbox -
+  c(10000, 70000, 0, 0) + c(0,0,30000,25000)
+map.data.bbox
+                                        # Download National Map Data
+## Crop National map to region of interest
+TNM <- read_stars(
+  "5-full-mito/ldco48i0100a.tif_nt00971/ldco48i0100a.tif"
+) %>% st_crop(map.data.bbox)
+##download.file("http://www2.census.gov/geo/tiger/GENZ2015/shp/cb_2015_us_state_500k.zip", destfile = "states.zip")
+##unzip("states.zip")
+state <- read_sf("5-full-mito/cb_2015_us_state_500k.shp") %>%
+  st_transform(5070) %>%
+  st_crop(map.data.bbox)
+
+data <- rbind(
+  c("Sound",  "Mobile\nBay",        -88.003, 30.421, "italic"),
+  c("Sound",  "Mississippi Sound",  -88.898, 30.317, "italic"),
+  c("Sound",  "Chandeleur\nSound",  -89.043, 29.908, "italic"),
+  c("Sound",  "Breton\nSound",      -89.302, 29.586, "italic"),
+  c("City",   "Biloxi",             -88.889, 30.407, "plain"),
+  c("City",   "Mobile",             -87.994, 30.681, "plain"),
+  c("City",   "Pensacola",          -87.217, 30.421, "plain"),
+  c("Island", "Cat\nIsland",         -89.085, 30.220, "plain"),
+  c("Island", "Ship\nIsland",        -88.910, 30.223, "plain"),
+  c("Island", "Horn\nIsland",        -88.662, 30.244, "plain"),
+  c("Island", "Petit Bois\nIsland",  -88.432, 30.207, "plain"),
+  c("Island", "Dauphin\nIsland",     -88.122, 30.248, "plain"),
+  c("Island", "Chandeleur\nIsland", -88.826, 29.843, "plain")
+) %>%
+  as.data.frame %>%
+setNames(c("Type", "Name", "lon", "lat", "fontface")) %>%
+st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
+st_transform(5070) %>%
+cbind(st_coordinates(.$geometry)) %>%
+mutate(Y = ifelse(Type == "Island" & Name != "Chandeleur\nIsland",
+                  Y - 5000, Y))
+data
+map.data.bbox
+ggplot() +
+  geom_stars(data=TNM, downsample = 1) +
+  scale_fill_manual(values=map.colors, na.value = "#f3f2ed") +
+  ## STATES
+  annotate(geom = "text", x = 595000, y = 780000,
+           label = "Louisiana",
+           family="ETBembo",
+           color = "grey22",
+           size = 12,
+           angle=90,
+           alpha=0.25) +
+  annotate(geom = "text", x = 660000, y = 880000,
+           label = "Mississippi",
+           family="ETBembo",
+           color = "grey22",
+           size = 12,
+           alpha=0.25) +
+  annotate(geom = "text", x = 795000, y = 880000,
+           label = "Alabama",
+           family="ETBembo",
+           color = "grey22",
+           size = 12,
+           alpha=0.25) +
+  annotate(geom = "text", x = 840000, y = 880000,
+           label = "FL",
+           family="ETBembo",
+           color = "grey22",
+           size = 12,
+           alpha=0.25) +
+  geom_text(aes(X, Y, label=Name, size=Type, color=Type,
+                fontface=fontface),
+            data=data, family="ETBembo", lineheight=0.75) +
+  scale_color_manual(values=c("Sound"="#0a71b3",
+                              "Island"="#0a71b3",
+                              "City"="black")) +
+  scale_size_manual(values=c("Sound"=6, "Island"=4, "City"=4)) +
+  ## LAKE
+  annotate(geom = "text", x = 613667, y = 794627,
+           label = "Lake\nBorgne",
+           fontface = "italic",
+           family="ETBembo",
+           color = "#0a71b3",
+           size = 4) +
+  ## RIVER
+  annotate(geom = "text", x = 611535, y = 820630,
+           label = "Pearl River",
+           family="ETBembo",
+           color = "#0a71b3",
+           size = 4,
+           angle=-65,
+           vjust =0,
+           hjust =0.4 ) +
+  geom_sf(data = state, fill=NA, linetype='dotted', linewidth=0.2) +
+  geom_point(aes(x=X, y=Y), data=map.data.prj, size=0.2, alpha=1) +
+  coord_sf(expand = F) +
+  theme(panel.grid.major = element_line(color = gray(.25),
+                                        linetype = "dashed",
+                                        linewidth = 0.1),
+        legend.position = 'none',
+        axis.title=element_blank()) +
+  ## LABEL
+  annotate(geom = "text", x = 775000, y = 775000,
+           label = "North Central\nGulf of Mexico",
+           fontface = "italic",
+           family="ETBembo",
+           color = "#0a71b3",
+           size = 13) +
+  annotation_scale(location = "br", width_hint = 0.25) +
+  annotation_north_arrow(location = "br", which_north = "true",
+                         pad_x = unit(0.75, "in"),
+                         pad_y = unit(0.5, "in"),
+                         style = north_arrow_fancy_orienteering)
+
+
+#+end_src
+
+#+RESULTS:
+[[file:fig-1.sample-area-map.tiff]]
+
+** Figure 2
+#+HEADER: :results output graphics file
+#+header: :file fig-2.mtcr-analysis.tiff :compression lzw
+#+header: :width 12.5 :height 14 :units in :res 180 :bg white
+#+begin_src R :exports both
+library(pegas)
+library(tidyverse)
+library(hues)
+library(ggtree)
+library(aplot)
+
+
+haplotypes.with_outgroup.fasta <-
+   read.FASTA("4-mtCR/2-haplotypes.with_outgroup.fixed.fasta")
+anno <- read.delim("4-mtCR/haplotype.published-groups.txt")
+membership <- read.delim("4-mtCR/4-struct-membership-K4.txt")
+
+tree.data <- haplotypes.with_outgroup.fasta %>%
+  dist.dna(pairwise.deletion = T) %>%
+  nj
+
+tree.data$node.label <-
+  boot.phylo(tree.data,
+             as.matrix(haplotypes.with_outgroup.fasta),
+             FUN=function(xx) nj(dist.gene(xx,
+                                           pairwise.deletion = T)),
+             B=1000)
+tree.data <- root(tree.data,
+                  outgroup=c("mtCR.out-1", "mtCR.out-2"))
+
+colors <- list("2017"=c("NW.inner"="#98d4ed",
+                        "E.inner"  =  "#f5c89b",
+                        "NW.outer" =  "#bebfbf",
+                        "E.outer"  =  "#e67383",
+                        "NW.Oceanic"= "#e0e47e",
+                        "E.oceanic" = "#c7a3c7",
+                        "NE.oceanic"= "#99c796"),
+               "2021"=c("green" =  "#669e40",
+                        "blue"  =  "#2f5597"))
+pop.labels <- c("mtCR.sound",
+                "mtCR.inner",
+                "mtCR.outer",
+                "mtCR.ocean")
+
+plot <- anno %>%
+  mutate(Group = factor(Group, c('New',
+                                 'NW.inner',
+                                 'E.inner',
+                                 'NW.outer',
+                                 'E.outer',
+                                 'NW.Oceanic',
+                                 'NE.oceanic',
+                                 'E.oceanic',
+                                 'green',
+                                 'blue')),
+         best.pop = factor(best.pop, pop.labels),
+         Set = factor(Set, c("New", "2017", "2021"))) %>%
+  ggplot(aes(Group, ID)) +
+  geom_tile(aes(fill=Group), na.rm=T) +
+  geom_text(aes(label=count), na.rm=T) +
+  facet_grid(cols=vars(Set), scales="free", space="free") +
+  scale_fill_manual( values=c(colors[['2021']],
+                              colors[['2017']],
+                              New="grey")) +
+  ggtitle("(C) Haplotype Members") +
+  theme_bw() +
+  theme(axis.title = element_blank(),
+        axis.text.y= element_blank(),
+        axis.text.x= element_text(angle = 25, hjust = 1),
+        legend.position = 'none')
+
+plot.structure <- right_join(membership,
+                             data.frame(ID=tree.data$tip.label)) %>%
+  ggplot(aes(q, ID, fill=pop)) +
+  geom_col(width=1) +
+  scale_fill_iwanthue(breaks=pop.labels, name="") +
+#  scale_y_discrete(expand = c(0,0)) +
+  scale_x_continuous(labels=scales::label_percent(),
+                     breaks = c(0.25, 0.5, 0.75), expand = c(0,0))+
+  ggtitle("(B) Population Structure") +
+  theme_bw()+
+  theme( axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+    legend.position = c(0.48,1.015),
+    legend.direction = "horizontal",
+    legend.background = element_blank())
+
+tree <- ggtree(tree.data) +
+  geom_nodepoint(aes(color=as.numeric(label)), na.rm=T,
+                 size=3) +
+  geom_tiplab(align=T, as_ylab=T) +
+  #geom_text2(aes(label=label, subset=!isTip),
+  #           vjust=0.5, hjust=-0.1, size=3) +
+  #geom_nodelab(aes(label=node), geom="label", bg="white") +
+  #geom_tiplab(aes(label=node), bg="white") +
+  ggtitle("(A) Neighboor-Joining Tree") +
+  scale_x_continuous(breaks=seq(0.005, 0.05, 0.01)) +
+  scale_color_viridis_c(name="Bootstrap Values") +
+  guides(color=guide_colorbar(title.position="top")) +
+  theme_tree2() +
+  theme(legend.position = c(0.25,0.95),
+        legend.direction = "horizontal")
+tree <- flip(tree, 116, 104)
+tree <- flip(tree, 106, 88)
+tree <- flip(tree, 117, 132)
+tree <- flip(tree, 87, 97)
+tree <- flip(tree, 84, 89)
+tree <- flip(tree, 82, 90)
+#
+
+main.plot <- plot.structure  %>%
+  insert_left(tree, width=0.80)%>%
+  insert_right(plot, width=0.90)
+options("aplot_guides" = "keep")
+main.plot
+      #+end_src
+
+      #+RESULTS:
+      [[file:fig-2.mtcr-analysis.tiff]]
+
+** Figure 3
+    #+header: :results output graphics file
+    #+header: :file fig-3.whole-mito-structure.tiff :compression lzw
+    #+header: :width 10 :height 7 :units in :res 300 :bg white
+    #+begin_src R
+library(pegas)
+library(tidyverse)
+library(grid)
+
+haplotypes.sequence <-
+  read.FASTA("5-full-mito/2-haplotypes.with_outgroup.fasta")
+
+haplotypes.full.dist <- haplotypes.sequence %>%
+  dist.dna(model = "N", pairwise.deletion = T)
+
+haplotypes.full.dist.order <-
+  hclust(haplotypes.full.dist)[c("labels", "order")] %>%
+  bind_cols %>%
+  mutate(new = labels[order]) %>%
+  pull(new)%>%
+  rev()
+
+membership <-
+  read.delim("5-full-mito/3-structure-haplotype.admix.coef.txt") %>%
+  filter(K==4) %>%
+  mutate(ID = factor(ID, haplotypes.full.dist.order),
+         pop = factor(pop))
+
+
+haplotypes.full.dist.data <-
+  haplotypes.full.dist %>%
+  as.matrix %>%
+  as.data.frame %>%
+  rownames_to_column("Hap1") %>%
+  gather(-Hap1, key="Hap2", value="dist") %>%
+  filter(!Hap1 %in% c("outgroup-001")) %>%
+  filter(!Hap2 %in% c("outgroup-001")) %>%
+  mutate(Hap1 = factor(Hap1, haplotypes.full.dist.order),
+         Hap2 = factor(Hap2, haplotypes.full.dist.order))
+
+
+plot.structure.hap <-
+  ggplot(membership, aes(ID, q, fill=pop)) +
+  geom_col(width=1) +
+  scale_fill_iwanthue() +
+  scale_x_discrete(expand = c(0,0)) +
+  scale_y_continuous(labels=scales::label_percent(),
+                     expand = c(0,0))+
+  guides(fill=guide_legend(title="Population", nrow=1))+
+  theme_bw()+
+  theme(#axis.text.x = element_text(angle = 90, vjust=0.5),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = 'top',
+    ## legend.title.position = "top",
+    ## legend.title = element_text(hjust=0.5)
+    )
+
+plot.distance.hap <-
+  filter(haplotypes.full.dist.data,
+         as.numeric(Hap1) >= as.numeric(Hap2)) %>%
+  ggplot(aes(Hap1, Hap2, fill=dist)) +
+  scale_x_discrete(name="Haplotype", position = 'top') +
+  scale_y_discrete(name="Haplotype", position = 'right') +
+  scale_fill_gradient(limit=c(0,20), low="grey30", high="white",
+                      na.value="white") +
+  geom_tile() +
+  coord_equal() +
+  guides(fill=guide_colorbar(title="Distance")) +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+#        legend.title.position = "top",
+        legend.position = 'top')
+
+
+plot.structure.hap.grob = ggplotGrob(plot.structure.hap)
+plot.structure.hap.grobs = split(plot.structure.hap.grob[["grobs"]],
+                                 plot.structure.hap.grob[["layout"]]$name)
+plot.distance.hap.grob = ggplotGrob(plot.distance.hap)
+plot.distance.hap.grobs = split(plot.distance.hap.grob[["grobs"]],
+                                 plot.distance.hap.grob[["layout"]]$name)
+
+top.vp <- viewport(
+  layout=grid.layout(5, 3,
+                     widths=unit(c(5, 5, 2),
+                                 c("lines", "null", "lines")),
+                     heights=unit(c(4, 1, 2, 2, 4),
+                                  c("lines", "null", "mm", "null", "lines")),
+                     respect = T))
+legend.vp <- viewport(layout.pos.row = 1,
+                         layout.pos.col = 2,
+                         just=c("center","bottom"),
+                         name="legend")
+structure.vp <- viewport(layout.pos.row = 2,
+                         layout.pos.col = 2,
+                         just=c("center","top"),
+                         name="structure")
+structure.axis.vp <- viewport(layout.pos.row = 2,
+                              layout.pos.col = 1,
+                              just=c("center","top"),
+                              name="structure.axis")
+distance.vp <- viewport(name="distance",
+                         layout.pos.row = 4,
+                         layout.pos.col = 2,
+                        just=c("center","top"))
+distance.axis.vp <- viewport(layout.pos.row = 4,
+                              layout.pos.col = 1,
+                              just=c("center","top"),
+                              name="distance.axis")
+splot <- vpTree(top.vp, vpList(legend.vp,
+                               structure.vp,
+                               structure.axis.vp,
+                               distance.vp,
+                               distance.axis.vp))
+grid.show.layout(splot$parent$layout, vp=splot$parent)
+
+grid.newpage()
+pushViewport(splot)
+seekViewport("structure")
+grid.draw(plot.structure.hap.grobs[['panel']][[1]])
+seekViewport("structure.axis")
+grid.draw(plot.structure.hap.grobs[['axis-l']][[1]])
+grid.text("Population Structure", rot=90)
+grid.text("A)", just='right', y=1, x=0.5, gp=gpar(fontsize=16))
+seekViewport("distance")
+#
+aspect.ratio =
+  as.numeric(convertY(unit(1, 'inch'), unitTo = 'native'))/
+  as.numeric(convertX(unit(1, 'inch'), unitTo = 'native'))
+#
+pushViewport(viewport(angle=-45,
+                         width=1/sqrt(2),
+                         height=aspect.ratio/sqrt(2),
+                         #height=unit(1/sqrt(2), "snpc"),
+                      y=1))
+grid.draw(plot.distance.hap.grobs[['panel']][[1]])
+popViewport()
+seekViewport("distance.axis")
+grid.text("Sequence Similarity", rot=90, just='right', y=0.95)
+grid.text("B)", just='right', y=1, x=0.5, gp=gpar(fontsize=16))
+#
+seekViewport("legend")
+pushViewport(viewport(layout = grid.layout(1, 2, widths = c(2,1))))
+pushViewport(viewport(layout.pos.col=1, just = c("right","bottom")))
+grid.draw(plot.structure.hap.grobs[['guide-box-top']][[1]])
+popViewport()
+pushViewport(viewport(layout.pos.col=2, just = c("left","bottom")))
+grid.draw(plot.distance.hap.grobs[['guide-box-top']][[1]])
+popViewport()
+popViewport()
+    #+end_src
+
+    #+RESULTS:
+    [[file:fig-3.whole-mito-structure.tiff]]
+
+** Figure 4
+   #+header: :results output graphics file
+   #+header: :file fig-4.haplotype-map.tiff :compression lzw
+   #+header: :width 9 :height 14 :units in :res 375 :bg white
+   #+begin_src R
+library(tidyverse)
+library(hues)
+
+library(ggforce)
+library(sf)
+library(ggspatial)
+library(stars)
+
+map.colors <- c(
+ "0" =rgb(193/255, 224/255, 250/255), ## Ocean water
+ "11"=rgb(193/255, 224/255, 250/255), ## Open water
+ "12"=rgb(229/255, 231/255, 232/255), ## Perennial ice / snow
+ "21"="#ebe5cf",                      ## Developed, open space
+ "22"="#ebe5cf",                      ## Developed, low intensity
+ "23"="#ebe5cf",                      ## Developed, medium intensity
+ "24"="#ebe5cf",                      ## Developed. high intensity
+ "31"=rgb(179/255, 175/255, 164/255), ## Barren land
+ "41"="#e4e8da",                      ## Deciduous forest
+ "42"="#e4e8da",                      ## Evergreen forest
+ "43"="#e4e8da",                      ## Mixed forest
+ "51"=rgb(176/255, 151/255,  61/255), ## Dwarf scrub  (Alaska only)
+ "52"="#f4f3ee",   ## Shrub / scrub
+ "71"="#f4f3ee",   ## Grassland / herbaceous
+ "72"=rgb(209/255, 209/255, 130/255), ## Sedge / herbaceous  (Alaska)
+ "74"=rgb(130/255, 186/255, 158/255), ## Moss (Alaska only)
+ "81"="#f4f3ee",   ## Pasture hay
+ "82"="#f4f3ee",   ## Cultivated crops
+ "90"="#e4e8da",   ## Woody wetlands
+ "101"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+ "102"=rgb(240/255, 235/255, 211/255),  ## Non-U.S. land
+ "103"=rgb(240/255, 235/255, 211/255),   ## Non-U.S. land
+setNames(iwanthue(4), sprintf("mitogroup-%d", 1:4)))
+
+
+sequence.membership.hap <-
+  read.delim("5-full-mito/3-structure-membership.K4.txt")
+map.data <-
+  data.table::fread("2-samples/bigtable.tsv", skip=2)  %>%
+  separate(`Latitude/Longitude`, into=c('lat', 'lon', NA),
+           sep="[NW]") %>%
+  mutate(lat = as.numeric(lat),
+         lon=as.numeric(lon) * -1) %>%
+  dplyr::select(Sample="Sample Name", lat, lon) %>%
+  right_join(sequence.membership.hap) %>%
+  mutate(Population = factor(Population),
+         Haplotype = fct_lump_min(Haplotype, min=1,
+                                  other_level="Singleton"))
+# Transform GPS to Albers_NAD83_L48
+map.data.prj <- st_as_sf(map.data,
+                         coords = c('lon', 'lat'),
+                         crs=4326) %>%
+  st_transform(5070) %>%
+  st_coordinates(.$geometry) %>%
+  cbind(map.data)
+
+map.data.bbox <- st_as_sf(map.data,
+                          coords = c('lon', 'lat'),
+                          crs=4326) %>%
+  st_transform(5070) %>%
+  st_bbox()
+map.data.bbox <- map.data.bbox -
+  c(1000, 25000, 0, 0) + c(0,0,30000,1000)
+map.data.bbox
+
+# Download National Map Data
+## Crop National map to region of interest
+TNM <- file.path("5-full-mito",
+                            "ldco48i0100a.tif_nt00971",
+                            "ldco48i0100a.tif") %>%
+  read_stars() %>%
+  st_crop(map.data.bbox)
+#plot(TNM)
+
+##download.file("http://www2.census.gov/geo/tiger/GENZ2015/shp/cb_2015_us_state_500k.zip", destfile = "states.zip")
+##unzip("states.zip")
+state <- read_sf("5-full-mito/cb_2015_us_state_500k.shp") %>%
+  st_transform(5070) %>%
+  st_crop(map.data.bbox)
+
+
+
+## Locations based on TNM
+## Pensacola - -87.217, 30.421
+## Lake Borgne -  -89.625, 30.042
+## Pearl River - -89.629 30.277
+## Biloxi, MS. - -88.889 60.407
+## Scale and compass
+## data.frame(
+## name=c("Pensacola", "Lake Borgne", "Pearl River", "Biloxi, MS.", "label"),
+## lon = c(-87.217, -89.625 ,-89.629 ,-88.889, -88.0247),
+## lat = c(30.421, 30.042, 30.277, 30.407, 30.109)
+## ) %>% st_as_sf(coords = c('lon', 'lat'), crs=4326) %>%
+##   st_transform(5070)
+## Projected CRS: NAD83 / Conus Albers
+##          name                  geometry
+## 1   Pensacola POINT (841011.5 855006.9)
+## 2 Lake Borgne POINT (613666.9 794626.7)
+## 3 Pearl River POINT (611534.9 820629.7)
+## 4 Biloxi, MS. POINT (681360.5 840064.4)
+## 5       label POINT (766765.4 813664.9)
+
+
+
+map.data.prj.split[[1]][chull(map.data.prj.split[[1]]),]
+
+map.data.prj
+
+map.data.prj.split <- split(map.data.prj, map.data.prj$Population)
+plots <- mapply(function(d,name,color){
+  ggplot(d) +
+    geom_stars(data=TNM, downsample = 1) +
+    scale_fill_manual(values=map.colors, na.value = "#f3f2ed") +
+    ## STATES
+    annotate(geom = "text", x = 660000, y = 855000,
+             label = "Mississippi",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             alpha=0.25) +
+    annotate(geom = "text", x = 780000, y = 855000,
+             label = "Alabama",
+             family="ETBembo",
+             color = "grey22",
+             size = 12,
+             alpha=0.25) +
+    ## CITES
+    annotate(geom = "text", x = 681361, y = 840064,
+             label = "Biloxi",
+             family="ETBembo",
+             color = "grey22",
+             size = 4,
+             hjust = 1) +
+    annotate(geom = "text", x = 841012, y = 855007,
+             label = "Pensacola, FL",
+             family="ETBembo",
+             color = "grey22",
+             size = 4,
+             hjust = 1) +
+    ## LAKE
+    annotate(geom = "text", x = 613667, y = 794627,
+             label = "Lake\nBorgne",
+             fontface = "italic",
+             family="ETBembo",
+             color = "#0a71b3",
+             size = 4) +
+    ## RIVER
+    annotate(geom = "text", x = 611535, y = 820630,
+             label = "Pearl River",
+             family="ETBembo",
+             color = "#0a71b3",
+             size = 4,
+             angle=-65,
+             vjust =0,
+             hjust =0.4 ) +
+    geom_sf(data = state, fill=NA, linetype='dotted', linewidth=0.2) +
+    geom_mark_hull(data=d, aes(x=X, y=Y), alpha=0.2, fill=color, concavity = 3,
+                   expand = unit(2,'mm'), radius = unit(1,'mm'), color='grey')  +
+    geom_point(aes(x=X, y=Y, color=Population), size=1, color=color) +
+    coord_sf(expand = F) +
+    ggtitle(name) +
+    theme(panel.grid.major = element_line(color = gray(.25),
+                                          linetype = "dashed",
+                                          linewidth = 0.1),
+          legend.position = 'none',
+          axis.title=element_blank())
+}, map.data.prj.split,
+   names(map.data.prj.split),
+   iwanthue(4),
+   SIMPLIFY=F)
+plots[[1]] = plots[[1]] +
+    ## LABEL
+  annotate(geom = "text", x = 810000, y = 790000,
+           label = "North Central\nGulf of Mexico",
+           fontface = "italic",
+           family="ETBembo",
+           color = "#0a71b3",
+           size = 10)
+plots[[4]] = plots[[4]] +
+  annotation_scale(location = "br", width_hint = 0.25) +
+  annotation_north_arrow(location = "br", which_north = "true",
+                         pad_x = unit(0.75, "in"),
+                         pad_y = unit(0.5, "in"),
+                         style = north_arrow_fancy_orienteering)
+cowplot::plot_grid(plotlist = plots, ncol = 1)
+
+
+## ggplot(map.data.prj) +
+##     geom_stars(data=TNM, downsample = 1) +
+##     scale_fill_manual(values=map.colors, na.value = "#f3f2ed") +
+##     ## STATES
+##     annotate(geom = "text", x = 660000, y = 855000,
+##              label = "Mississippi",
+##              family="ETBembo",
+##              color = "grey22",
+##              size = 12,
+##              alpha=0.25) +
+##     annotate(geom = "text", x = 780000, y = 855000,
+##              label = "Alabama",
+##              family="ETBembo",
+##              color = "grey22",
+##              size = 12,
+##              alpha=0.25) +
+##     ## CITES
+##     annotate(geom = "text", x = 681361, y = 840064,
+##              label = "Biloxi",
+##              family="ETBembo",
+##              color = "grey22",
+##              size = 4,
+##              hjust = 1) +
+##     annotate(geom = "text", x = 841012, y = 855007,
+##              label = "Pensacola, FL",
+##              family="ETBembo",
+##              color = "grey22",
+##              size = 4,
+##              hjust = 1) +
+##     ## LAKE
+##     annotate(geom = "text", x = 613667, y = 794627,
+##              label = "Lake\nBorgne",
+##              fontface = "italic",
+##              family="ETBembo",
+##              color = "#0a71b3",
+##              size = 4) +
+##     ## RIVER
+##     annotate(geom = "text", x = 611535, y = 820630,
+##              label = "Pearl River",
+##              family="ETBembo",
+##              color = "#0a71b3",
+##              size = 4,
+##              angle=-65,
+##              vjust =0,
+##              hjust =0.4 ) +
+##     geom_sf(data = state, fill=NA, linetype='dotted', linewidth=0.2) +
+##     geom_mark_hull(aes(x=X, y=Y, fill=Population), alpha=0.2, concavity = 3,
+##                    expand = unit(2,'mm'), radius = unit(1,'mm'))  +
+##     geom_point(aes(x=X, y=Y, color=Population), size=1) +
+##     coord_sf(expand = F) +
+##   scale_color_iwanthue()+
+##     ggtitle("") +
+##     theme(panel.grid.major = element_line(color = gray(.25),
+##                                           linetype = "dashed",
+##                                           linewidth = 0.1),
+##           legend.position = 'none',
+##           axis.title=element_blank()) +
+##     ## LABEL
+##   annotate(geom = "text", x = 810000, y = 790000,
+##            label = "North Central\nGulf of Mexico",
+##            fontface = "italic",
+##            family="ETBembo",
+##            color = "#0a71b3",
+##            size = 10) +
+##   annotation_scale(location = "br", width_hint = 0.25) +
+##   annotation_north_arrow(location = "br", which_north = "true",
+##                          pad_x = unit(0.75, "in"),
+##                          pad_y = unit(0.5, "in"),
+##                          style = north_arrow_fancy_orienteering)
+   #+end_src
+
+   #+RESULTS:
+   [[file:fig-4.haplotype-map.tiff]]
+** Supp. Fig. 1
+#+header: :results output file graphics
+#+header: :file supp-fig-1.primer-locations.png
+#+header: :width 8 :height 6 :units in :res 600 :bg white
+#+header: :var locs=1-primer-design/readme.org:pair-locations
+#+begin_src R :exports both
+library(tidyverse)
+library(scales)
+library(ggtext)
+
+colnames(locs) <- c('Pair', 'used', 'Start', 'End')
+
+locs <- locs %>%
+  arrange(, Pair) %>%
+  mutate(pos = (Start+End) / 2,
+         Pair = factor(Pair, levels = paste0('P', 1:10))) %>%
+  mutate(level = as.numeric(Pair)) %>%
+  mutate(ymin=level,
+         ymax=level + as.numeric(used)*0.25 + 0.5)
+
+locs$Pair <- select(locs, Pair, used) %>%
+  unique %>%
+  pull(used, name=Pair) %>%
+  ifelse(.,
+         sprintf("**%s**", names(.)),
+         names(.)) %>%
+  setNames(names(.), .) %>%
+  fct_recode(locs$Pair, !!!.)
+
+#colorbrewer pastel for primers not used
+#colorbrewer set1 for primers used
+cols <- c(
+  "P1" = "#b3e2cddd",
+  "P2" = "#fdcdacdd",
+  "P3" = "#cbd5e8dd",
+  "P5" = "#f4cae4dd",
+  "P8" = "#e6f5c9dd",
+  "P9" = "#fff2aedd",
+  "**P4**" = "#e41a1cff",
+  "**P6**" = "#377eb8ff",
+  "**P7**" = "#4daf4aff",
+  "**P10**"= "#984ea3ff"
+)
+
+label <- function(x){
+  l <- ifelse(x ==1 , "16.3Kbp",
+              label_number(scale_cut=cut_si('bp'))(x))
+  str(l)
+  return(l)
+}
+
+ggplot(locs,
+       aes(xmax=Start, xmin=End,
+           ymax=ymax, ymin=level,
+           fill=Pair )) +
+  annotate(geom='rect', xmin=1, xmax=Inf,
+           ymin=-Inf, ymax = 0 , fill='white') +
+   geom_rect() +
+  scale_y_continuous(limits = c(-15, 11), expand = c(0,0)) +
+  scale_fill_manual(values=cols)+
+  scale_alpha_manual(values=c(0.28, 1)) +
+  scale_x_continuous(
+    breaks=c(1, seq(2000, 14000, 2000)),
+    labels=label) +
+  coord_polar(clip='off') +
+  ggtitle("Tested Primers") +
+  labs(caption="Tested primer pair locations on the mitochondrial genome. Highlighted pairs (P4, P6, P7, and P10)\nwere used to amplify the mtDNA in all samples.") +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.text=element_markdown(),
+        plot.caption = element_text(hjust=0))
+
+#+end_src
+
+#+RESULTS:
+[[file:supp-fig-1.primer-locations.png]]
+** Supp. Fig. 2
+#+header: :results output file graphics
+#+header: :file supp-fig-2.amp-coverage.png
+#+header: :width 8 :height 3.5 :units in :res 600
+#+begin_src R :exports both
+library(tidyverse)
+library(ggrepel)
+
+data <- read.table("2-samples/2-coverage.tbl") %>%
+  gather(key="contig", value="avgcov", P4, P6, P7, P10) %>%
+  mutate(contig = fct_shift(factor(contig)))
+
+pos = position_jitter(width = 0.3, seed = 2)
+
+ggplot(data, aes(contig, avgcov )) +
+geom_boxplot(outlier.alpha = 0) +
+geom_jitter(color="grey50", shape=20, position=pos, size=0.5) +
+scale_y_log10() +
+theme_minimal() +
+xlab("Amplicon") +
+ylab("Median coverage") +
+facet_grid(rows=vars(Type), scales='free_y') +
+  labs(title="Median Coverage",
+       caption="Median base coverage across each amplicon for each sample.") +
+theme(plot.caption = element_text(hjust  = 0))
+
+#+end_src
+
+#+RESULTS:
+[[file:supp-fig-2.amp-coverage.png]]
+** Supp. Fig 3
+#+HEADER: :results output graphics file
+#+HEADER: :file supp-fig-3.alignment.png
+#+HEADER: :width 8 :height 5 :units in :res 600 :bg white
+#+begin_src R :exports both
+library(pegas)
+library(tidyverse)
+library(hues)
+
+read.dna("4-mtCR/1-mafft.fasta.gz", format='fasta', as.matrix=T) %>%
+  as.character %>%
+  as.data.frame %>%
+  rownames_to_column("Samples") %>%
+  gather(-Samples, key='Position', value="Base") %>%
+  mutate(Position = as.numeric(sub("V", "", Position)),
+         Base = str_to_upper(Base)) %>%
+  filter(Base != "-") %>%
+  ggplot(aes(Position, Samples, fill=Base))+
+  geom_raster() +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_fill_brewer(type='qual', palette="Accent",
+                    breaks=c("A","C", "G", "T")) +
+  labs(title = "mtCR Alignment",
+       caption = "Alignment of all mtCR sequences (both published and newly sequenced). Samples are shown in rows, alignment position is shown in columns. \nThe missing data (white) at both ends were trimmed.") +
+  theme_minimal() +
+  theme(panel.grid = element_blank(),
+        axis.text.y = element_blank(),
+        plot.caption = element_text(hjust = 0),
+        legend.position = "top")
+
+#+end_src
+
+#+RESULTS:
+[[file:supp-fig-3.alignment.png]]
+** Supp. Fig 4
+  #+HEADER: :results output graphics file
+  #+HEADER: :file supp-fig-4.unique-haplotypes.png
+  #+HEADER: :width 8 :height 6 :units in :res 600 :bg white
+  #+begin_src R :exports both
+
+haplotypes.with_outgroup <-
+  read.dna("4-mtCR/2-haplotypes.with_outgroup.fixed.fasta",
+           format='fasta', as.matrix=T)
+
+haplotypes.with_outgroup.dist <-
+  haplotypes.with_outgroup %>%
+  dist.dna(model = 'N', as.matrix = T) %>%
+  as.data.frame %>%
+  rownames_to_column("Hap1") %>%
+  gather(-Hap1, key="Hap2", value="Dist")
+
+haplotypes.of.interest <- haplotypes.with_outgroup.dist %>%
+  mutate(tmp=Hap1, Hap1=Hap2, Hap2=tmp) %>%
+  select(-tmp) %>%
+  rbind(haplotypes.with_outgroup.dist) %>%
+  filter(grepl("mtCR.new", Hap1)) %>%
+  filter(Dist <=  1) %>%
+  unique
+
+haplotypes.with_outgroup %>%
+  as.character %>%
+  t %>%
+  as.data.frame %>%
+  rowid_to_column("Pos") %>%
+  gather(-Pos, key="Hap2", value="base") %>%
+  right_join(haplotypes.of.interest,
+             relationship = 'many-to-many') %>%
+  group_by(Hap1, Pos ) %>%
+  filter(length(unique(base)) > 1) %>%
+  ungroup %>%
+  ggplot(aes(Pos, Hap2, color=base)) +
+  geom_text(aes(label=base)) +
+  facet_grid(rows=vars(Hap1), space = 'free', scales = 'free',
+             switch='y') +
+  scale_color_brewer(type='qual', palette='Set1') +
+  labs(title = "New haplotype differences",
+  caption=paste0(c("Nucleotide differences between the mtCR.new",
+                   "haplotypes and the most similar sequences. All",
+                   "sequences with a\nsingle mismatched base",
+                   "to the haplotype of interest are displayed.",
+                   "All identical bases are removed for clarity."),
+                 collapse = " ")) +
+  theme_bw() +
+  theme(strip.text.y.left  = element_text(angle = 0),
+        plot.caption = element_text(hjust = 0),
+        strip.placement = 'outside',
+        legend.position = 'none',
+        axis.title = element_blank())
+  #+end_src
+
+  #+RESULTS:
+  [[file:supp-fig-4.unique-haplotypes.png]]
+** Supp. Fig 5
+
+#+header: :results output graphics file
+#+header: :file supp-fig-5.select-K.png
+#+header: :width 8 :height 4 :units in :res 600 :bg white
+#+begin_src R :exports both
+library(LEA)
+
+project.snmf <- file.path("4-mtCR", "4-structure",
+                          "haplotypes-fixed.snmfProject") %>%
+  load.snmfProject
+
+
+project.pca <- file.path("4-mtCR", "haplotypes-fixed.pcaProject") %>%
+  load.pcaProject()
+
+pca.scree.plot <- tracy.widom(project.pca) %>%
+  ggplot(aes(N, percentage)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels=scales::label_percent()) +
+  labs(title = "PCA Scree Plot",
+       x = "Principal Components",
+       y = "Percentage of Variance") +
+  theme_minimal()
+
+summary.info = summary(project.snmf)$crossEntropy
+
+plot.entropy <- as.data.frame(t(summary.info)) %>%
+  tibble::rownames_to_column("K") %>%
+  mutate(K = as.numeric(substring(K, 4))) %>%
+  ggplot(aes(K, min)) +
+#  geom_ribbon(aes(ymin=min, ymax=max), alpha=0.2, color='grey70') +
+#  geom_hline(aes(yintercept = min(summary.info[2,]), color = "red")) +
+  geom_line(aes(x = K, y = min, group=1)) +
+  geom_point() +
+  labs(title = "Cross-entropy versus K",
+       x = "Number of ancestral populations (K)",
+       y = "Minimum Cross-entropy") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+cowplot::plot_grid(pca.scree.plot,
+                     plot.entropy,
+                     NA, NA, rel_heights = c(10,1),
+                     labels = c("A", "B")) +
+  cowplot::draw_text(paste0("PCA Scree plot (A) and Minimum ",
+                            "cross-entropy per K (B) for the mtCR ",
+                            "structure analysis", collapse = " "),
+                     y=0.05, size=12)
+#+end_src
+
+#+RESULTS:
+[[file:supp-fig-5.select-K.png]]
+** Supp Fig 6
+
+#+header: :results output graphics file
+#+header: :file supp-fig-6.mtCR-vs-whole-sankey.png
+#+header: :width 8 :height 16 :units in :res 600 :bg white
+#+begin_src R :exports both
+library(ggsankey)
+
+mtCR.hap.membership <-
+  read.delim("4-mtCR/4-struct-membership.hap-fixed.txt")
+full.hap.membership <-
+  read.delim("5-full-mito/3-structure-membership.K4.txt")
+
+hap.compare.data <-
+  inner_join(full.hap.membership, mtCR.hap.membership,
+           by=c("Sample"="Acc")) %>%
+  select("Hap.mtCR"="ID", "Hap.full"="Haplotype") %>%
+  group_by(Hap.full) %>%
+  mutate(full.n=n()) %>%
+  group_by(Hap.mtCR) %>%
+  mutate(mtcr.n=n()) %>%
+  ungroup() %>%
+  arrange(desc(mtcr.n), Hap.mtCR, desc(full.n)) %>%
+  mutate(Hap.full = fct_inorder(Hap.full),
+         Hap.mtCR = fct_inorder(Hap.mtCR))
+
+make_long(hap.compare.data, Hap.mtCR, Hap.full) %>%
+  mutate(node = factor(node,
+                       levels(fct_c(hap.compare.data$Hap.mtCR,
+                                    hap.compare.data$Hap.full))),
+         next_node=factor(next_node,
+                          levels(fct_c(hap.compare.data$Hap.mtCR,
+                                hap.compare.data$Hap.full))),
+         x = factor(x, c("Hap.mtCR", "Hap.full"),
+                    c("mtCR\nHaplotypes",
+                      "Whole Mitogenome\nHaplotypes"))) %>%
+  group_by(node) %>%
+  mutate(label=ifelse(n() >= 3, as.character(node), NA)) %>%
+  ggplot(aes(x = x, next_x = next_x, node = node,
+             next_node = next_node, fill = fct_shuffle(node),
+             label = label)) +
+  geom_sankey(flow.alpha = .6,
+              node.color = "gray30") +
+  geom_sankey_label(size = 3, color = "white", fill = "gray40") +
+  scale_fill_viridis_d(drop = FALSE) +
+  theme_sankey(base_size = 18) +
+  labs(x = NULL,
+       title ="mtCR vs Whole Mitogenome Haplotype Change",
+       caption = paste("Sankey plot showing the relationship bewteen",
+                       "the haplotypes from mtCR to whole",
+                       "\nmitogenome. Haplotypes with five or more", "members are labeled.")) +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0),
+        plot.caption = element_text(hjust = 0))
+
+#+end_src
+
+#+RESULTS:
+[[file:supp-fig-6.mtCR-vs-whole-sankey.png]]
+** Supp Fig 7
+
+#+header: :results output graphics file
+#+header: :file supp-fig-7.select-K-full.png
+#+header: :width 8 :height 4 :units in :res 600 :bg white
+#+begin_src R :exports both
+library(LEA)
+
+project.snmf <- file.path("5-full-mito",
+                          "3-structure-haplotype.snmfProject") %>%
+  load.snmfProject
+project.pca <- file.path("5-full-mito",
+                         "3-structure-haplotype.pcaProject") %>%
+  load.pcaProject()
+
+pca.scree.plot <- tracy.widom(project.pca) %>%
+  ggplot(aes(N, percentage)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels=scales::label_percent()) +
+  labs(title = "PCA Scree Plot",
+       x = "Principal Components",
+       y = "Percentage of Variance") +
+  theme_minimal()
+
+summary.info = summary(project.snmf)$crossEntropy
+
+plot.entropy <- as.data.frame(t(summary.info)) %>%
+  tibble::rownames_to_column("K") %>%
+  mutate(K = as.numeric(substring(K, 4))) %>%
+  ggplot(aes(K, min)) +
+#  geom_ribbon(aes(ymin=min, ymax=max), alpha=0.2, color='grey70') +
+#  geom_hline(aes(yintercept = min(summary.info[2,]), color = "red")) +
+  geom_line(aes(x = K, y = min, group=1)) +
+  geom_point() +
+  labs(title = "Cross-entropy versus K",
+       x = "Number of ancestral populations (K)",
+       y = "Minimum Cross-entropy") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+cowplot::plot_grid(pca.scree.plot,
+                     plot.entropy,
+                     NA, NA, rel_heights = c(10,1),
+                     labels = c("A", "B")) +
+  cowplot::draw_text(paste("PCA Scree plot (A) and Minimum",
+                           "cross-entropy per K (B) for the whole",
+                           "mitogenome structure analysis"),
+                     y=0.05, size=12)
+#+end_src
+
+#+RESULTS:
+[[file:supp-fig-7.select-K-full.png]]
+** Supp Fig 8
+
+#+HEADER: :results output graphics file
+#+HEADER: :file supp-fig-8.haplotype-nj-tree.png
+#+header: :width 8 :height 6 :units in :bg white :res 600
+#+begin_src R
+library(ggtree)
+tree.data <- read.tree("5-full-mito/haplotypes-nj-tree.nwk")
+
+full.hap.membership <-
+  read.delim("5-full-mito/3-structure-membership.K4.txt")
+
+anno <- data.frame(ID=tree.data$tip.label) %>%
+  left_join(full.hap.membership, by=c("ID"="Haplotype")) %>%
+  select(-Sample) %>%
+  mutate(clade=factor(Population)) %>%
+  distinct()
+anno
+
+layout <- ggtree(tree.data) %<+% anno
+p <- layout +
+  geom_tippoint(aes(color=clade), size = 1) +
+  ##geom_text(aes(label=node)) +
+  ## geom_label_repel(aes(label=ifelse(label %in% c("SER19-00888",
+  ##                                                "SER11-0141"),
+  ##                             label, NA),
+  ##                      segment.linetype=2), na.rm = T) +
+  ## geom_treescale(y=14) +
+  scale_color_iwanthue(na.value="black",
+                       breaks=sprintf("mitogroup-%d", 1:4),
+                       name="Population") +
+  theme_tree2() +
+  labs(title="Whole Mitogenome Neighbor-Joining Tree",
+       caption="Neighbor-joining tree for the whole mitogenome. Outgroup is the *S. frontalis* sequence NC_060612.1.
+<br>Color shows the assigned group of each sample.") +
+  theme(legend.position=c(0.05,0.6),
+        legend.background = element_blank(),
+        axis.text = element_text(),
+        plot.caption = element_markdown(hjust=0, size=12))
+#p <- rotate_tree(p, -45)
+p <- flip(p, 188, 227)
+p <- flip(p, 214, 210)
+p
+      #+end_src
+
+      #+RESULTS:
+      [[file:supp-fig-8.haplotype-nj-tree.png]]
+
+
+
+
+
+** mtCR Minimum Spanning Network
+- [ ] move legend
+- [ ] add title
+#+begin_src R :exports both
+library(pegas)
+library(tidyverse)
+library(poppr)
+library(hues)
+
+iwanthue(4)
+
+haplotypes.without_outgroup.fasta <-
+   read.FASTA("4-mtCR/2-haplotypes.without_outgroup.fixed.fasta")
+
+pop.data <-
+  read.delim("4-mtCR/haplotype.published-groups.txt") %>%
+  select(ID, best.pop) %>%
+  mutate(best.pop = factor(best.pop, c("mtCR.sound",
+                                       "mtCR.inner",
+                                       "mtCR.outer",
+                                       "mtCR.ocean"))) %>%
+  distinct %>%
+  column_to_rownames('ID')
+
+sizes <-
+  read.delim("4-mtCR/haplotype.sizes.txt") %>%
+  mutate(Haplotype = gsub('[*]', '', Haplotype)) %>%
+  filter(!grepl("mtCR.out-", Haplotype)) %>%
+  column_to_rownames('Haplotype')
+
+
+
+genind <-haplotypes.without_outgroup.fasta %>%
+  DNAbin2genind(pop=pop.data[names(haplotypes.without_outgroup.fasta),
+                             "best.pop"])
+strata(genind) <- sizes
+genind
+
+hap.msn <- poppr.msn(genind, diss.dist(genind))
+
+
+adist <- diss.dist(genind)
+amsn <- poppr.msn(genind, adist)
+igraph::E(amsn$graph)$weight
+
+igraph::V(amsn$graph)$size <-
+                     sqrt(sizes[
+                       names(haplotypes.without_outgroup.fasta),
+                       "Pub"] + 1)
+
+
+plot_poppr_msn(genind, amsn,
+               layfun=igraph::layout.kamada.kawai,
+               wscale=F, palette = iwanthue(4),
+               scale.leg = F, size.leg = F, inds="NONE",
+               label.color='black', nodescale = 5,
+               edge.label = if_else(igraph::E(amsn$graph)$weight == 1,
+                                    NA,
+                                    igraph::E(amsn$graph)$weight))
+#+end_src
+
+** mtCR Minimum Spanning Network
+- [ ] move legend
+- [ ] add title
+#+begin_src R :exports both
+library(pegas)
+library(tidyverse)
+library(poppr)
+library(hues)
+library(igraph)
+
+haplotypes.without_outgroup.fasta <-
+   read.FASTA("5-full-mito/2-haplotypes.with_outgroup.fasta")[-1]
+
+pop.data <-
+  read.delim("5-full-mito/3-structure-membership.K4.txt") %>%
+  mutate(Population = factor(Population)) %>%
+  group_by(Haplotype, Population) %>%
+  count %>%
+  mutate(color = factor(Population, sprintf("mitogroup-%d", 1:4),
+                        iwanthue(4, plot=T))) %>%
+  column_to_rownames('Haplotype')
+
+genind <-haplotypes.without_outgroup.fasta %>%
+  DNAbin2genind(pop=pop.data[names(haplotypes.without_outgroup.fasta),
+                             "Population"])
+strata(genind) <- pop.data
+genind@strata
+
+adist <- diss.dist(genind)
+amsn <- poppr.msn(genind, adist)
+
+weight <- E(amsn$graph)$weight
+
+weight.adjust <- attr(E(amsn$graph), "vnames") %>%
+  as.data.frame(nm="Haplotype") %>%
+  rowid_to_column("ID") %>%
+  separate_rows(Haplotype, sep="[|]") %>%
+  left_join(rownames_to_column(pop.data, "Haplotype")) %>%
+  group_by(ID) %>%
+  summarize(size=sum(log(n)) + 1) %>%
+  pull(size)
+#
+E(amsn$graph)$weight <- weight  #(weight.adjust)
+V(amsn$graph)$size <-
+                      sqrt(pop.data[igraph::V(amsn$graph)$name, "n"])
+V(amsn$graph)$fill <- pop.data[igraph::V(amsn$graph)$name, "color"]
+#
+plot_poppr_msn(genind, amsn,
+               layout=igraph::layout.fruchterman.reingold,
+               wscale=F, gscale = F, palette = iwanthue(4),
+               scale.leg = F, size.leg = F, inds="NONE",
+               label.color='black', nodescale = 5,
+               edge.label = if_else(weight == 1,
+                                    NA,
+                                    weight))
+
+g <- amsn$graph
+#layout <- layout_with_gem(g, maxiter=1000000)
+#layout <- layout.kamada.kawai(g, maxiter=5000, kkconst=20000, epsilon=0)
+layout <- layout.reingold.tilford(g, circular = T)
+#layout <- layout.fruchterman.reingold(g)
+plot.igraph(g, edge.width = 1,
+            vertex.label = NA,
+            vertex.color = as.character(pop.data[V(g)$name, "color"]),
+            layout=layout,
+            edge.label = if_else(weight == 1,
+                                 NA,
+                                 weight))
+#+end_src
