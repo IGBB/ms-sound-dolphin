@@ -316,7 +316,7 @@ main.plot
     #+header: :results output graphics file
     #+header: :file fig-3.whole-mito-structure.tiff :compression lzw
     #+header: :width 10 :height 7 :units in :res 300 :bg white
-    #+begin_src R
+    #+begin_src R :exports both
 library(pegas)
 library(tidyverse)
 library(grid)
@@ -473,7 +473,7 @@ popViewport()
    #+header: :results output graphics file
    #+header: :file fig-4.haplotype-map.tiff :compression lzw
    #+header: :width 9 :height 14 :units in :res 375 :bg white
-   #+begin_src R
+   #+begin_src R :exports both
 library(tidyverse)
 library(hues)
 
@@ -1105,7 +1105,7 @@ cowplot::plot_grid(pca.scree.plot,
 #+HEADER: :results output graphics file
 #+HEADER: :file supp-fig-8.haplotype-nj-tree.png
 #+header: :width 8 :height 6 :units in :bg white :res 600
-#+begin_src R
+#+begin_src R :exports both
 library(ggtree)
 tree.data <- read.tree("5-full-mito/haplotypes-nj-tree.nwk")
 
@@ -1151,17 +1151,16 @@ p
 
 
 
-
 ** mtCR Minimum Spanning Network
-- [ ] move legend
-- [ ] add title
+#+HEADER: :results output graphics file
+#+HEADER: :file supp-fig-9.mtCR-msn.png
+#+header: :width 9 :height 9 :units in :bg white :res 300
 #+begin_src R :exports both
 library(pegas)
 library(tidyverse)
 library(poppr)
 library(hues)
-
-iwanthue(4)
+library(igraph)
 
 haplotypes.without_outgroup.fasta <-
    read.FASTA("4-mtCR/2-haplotypes.without_outgroup.fixed.fasta")
@@ -1182,40 +1181,68 @@ sizes <-
   filter(!grepl("mtCR.out-", Haplotype)) %>%
   column_to_rownames('Haplotype')
 
-
-
 genind <-haplotypes.without_outgroup.fasta %>%
   DNAbin2genind(pop=pop.data[names(haplotypes.without_outgroup.fasta),
                              "best.pop"])
 strata(genind) <- sizes
-genind
-
-hap.msn <- poppr.msn(genind, diss.dist(genind))
-
 
 adist <- diss.dist(genind)
 amsn <- poppr.msn(genind, adist)
-igraph::E(amsn$graph)$weight
 
-igraph::V(amsn$graph)$size <-
-                     sqrt(sizes[
-                       names(haplotypes.without_outgroup.fasta),
-                       "Pub"] + 1)
+pal <- setNames(
+  c("#97C160", "#B65A49", "#737F86", "#914CB1"),
+  levels(pop.data$best.pop))
 
+vertex.size <-
+  sizes[names(haplotypes.without_outgroup.fasta), "New"]
 
-plot_poppr_msn(genind, amsn,
-               layfun=igraph::layout.kamada.kawai,
-               wscale=F, palette = iwanthue(4),
-               scale.leg = F, size.leg = F, inds="NONE",
-               label.color='black', nodescale = 5,
-               edge.label = if_else(igraph::E(amsn$graph)$weight == 1,
-                                    NA,
-                                    igraph::E(amsn$graph)$weight))
+V(amsn$graph)$size <- log(vertex.size+1) + 1.5
+V(amsn$graph)$label <- if_else(vertex.size < 5, NA, vertex.size)
+V(amsn$graph)$frame.color <-
+               setNames(pop.data$best.pop, rownames(pop.data)) %>%
+               .[names(haplotypes.without_outgroup.fasta)] %>%
+               pal[.]
+V(amsn$graph)$color <-
+              if_else(vertex.size > 0, V(amsn$graph)$frame.color, "white")
+
+E(amsn$graph)$width <- 2
+E(amsn$graph)$label <- if_else(E(amsn$graph)$weight == 1,
+                               NA, E(amsn$graph)$weight)
+
+plot.igraph(amsn$graph, layout = igraph::layout.kamada.kawai)
+
+pushViewport(viewport(x=0.80, y=0.85, width=unit(6, "lines")))
+legend <-
+  as.data.frame(pal, nm="color") %>%
+  rownames_to_column("pop") %>%
+  mutate(pop = factor(pop, rev(c("mtCR.sound",
+                             "mtCR.inner",
+                             "mtCR.outer",
+                             "mtCR.ocean")))) %>%
+  ggplot(aes(1, pop, fill=color)) +
+  geom_tile() +
+  scale_fill_identity()+
+  scale_y_discrete(position = 'right') +
+  coord_equal() +
+  ggtitle("Population") +
+  theme_void() +
+  theme(axis.text.y.right = element_text())
+grid.draw(ggplotGrob(legend))
+popViewport()
+
+grid.text("mtCR Minimium Spanning Network",
+          hjust=0, vjust=0, x=0.1, y=0.95,
+          gp=gpar(fontsize=20))
 #+end_src
 
-** mtCR Minimum Spanning Network
-- [ ] move legend
-- [ ] add title
+#+caption: Minimum Spanning Network for the mtCR haplotypes. Filled vertices are haplotypes found in the newly seqeunces samples. The vertices with five or more samples are labeled.
+#+RESULTS:
+[[file:supp-fig-9.mtCR-msn.png]]
+
+** whole mitogenome Minimum Spanning Network
+#+HEADER: :results output graphics file
+#+HEADER: :file supp-fig-10.mito-msn.png
+#+header: :width 10 :height 10 :units in :bg white :res 300
 #+begin_src R :exports both
 library(pegas)
 library(tidyverse)
@@ -1231,54 +1258,56 @@ pop.data <-
   mutate(Population = factor(Population)) %>%
   group_by(Haplotype, Population) %>%
   count %>%
-  mutate(color = factor(Population, sprintf("mitogroup-%d", 1:4),
-                        iwanthue(4, plot=T))) %>%
+  mutate(color = factor(Population,
+                        sprintf("mitogroup-%d", 1:4),
+                        iwanthue(4))) %>%
   column_to_rownames('Haplotype')
 
 genind <-haplotypes.without_outgroup.fasta %>%
   DNAbin2genind(pop=pop.data[names(haplotypes.without_outgroup.fasta),
                              "Population"])
 strata(genind) <- pop.data
-genind@strata
 
 adist <- diss.dist(genind)
 amsn <- poppr.msn(genind, adist)
 
-weight <- E(amsn$graph)$weight
-
-weight.adjust <- attr(E(amsn$graph), "vnames") %>%
-  as.data.frame(nm="Haplotype") %>%
-  rowid_to_column("ID") %>%
-  separate_rows(Haplotype, sep="[|]") %>%
-  left_join(rownames_to_column(pop.data, "Haplotype")) %>%
-  group_by(ID) %>%
-  summarize(size=sum(log(n)) + 1) %>%
-  pull(size)
+G <- amsn$graph
 #
-E(amsn$graph)$weight <- weight  #(weight.adjust)
-V(amsn$graph)$size <-
-                      sqrt(pop.data[igraph::V(amsn$graph)$name, "n"])
-V(amsn$graph)$fill <- pop.data[igraph::V(amsn$graph)$name, "color"]
+vertex.size <- pop.data[V(G)$name, "n"]
+V(G)$label <- if_else(vertex.size < 5, NA, vertex.size)
+V(G)$size <- log(vertex.size+1) +1.75
+V(G)$color <- as.character(pop.data[V(G)$name, "color"])
+V(G)$label.color <- "white"
 #
-plot_poppr_msn(genind, amsn,
-               layout=igraph::layout.fruchterman.reingold,
-               wscale=F, gscale = F, palette = iwanthue(4),
-               scale.leg = F, size.leg = F, inds="NONE",
-               label.color='black', nodescale = 5,
-               edge.label = if_else(weight == 1,
-                                    NA,
-                                    weight))
+E(G)$width <- 2
+E(G)$label <- if_else(E(G)$weight == 1, NA, E(G)$weight)
 
-g <- amsn$graph
-#layout <- layout_with_gem(g, maxiter=1000000)
-#layout <- layout.kamada.kawai(g, maxiter=5000, kkconst=20000, epsilon=0)
-layout <- layout.reingold.tilford(g, circular = T)
-#layout <- layout.fruchterman.reingold(g)
-plot.igraph(g, edge.width = 1,
-            vertex.label = NA,
-            vertex.color = as.character(pop.data[V(g)$name, "color"]),
-            layout=layout,
-            edge.label = if_else(weight == 1,
-                                 NA,
-                                 weight))
+set.seed(42)
+layout <- layout.reingold.tilford(G, circular = T)
+layout <- layout_with_gem(G, coords=layout)
+plot.igraph(G, layout=layout)
+
+pushViewport(viewport(x=0.85, y=0.85, width=unit(6, "lines")))
+legend <-
+  select(pop.data, "Population", "color") %>%
+  distinct() %>%
+  mutate(Population = fct_rev(factor(Population))) %>%
+  ggplot(aes(1, Population, fill=color)) +
+  geom_tile() +
+  scale_fill_identity()+
+  scale_y_discrete(position = 'right') +
+  coord_equal() +
+  ggtitle("Population") +
+  theme_void() +
+  theme(axis.text.y.right = element_text())
+grid.draw(ggplotGrob(legend))
+popViewport()
+
+grid.text("Whole Mitogenome Minimium Spanning Network",
+          hjust=0, vjust=0, x=0.1, y=0.95,
+          gp=gpar(fontsize=20))
 #+end_src
+
+#+caption: Minimum Spanning Network for the whole mitogenome  haplotypes. The vertices with five or more samples are labeled.
+#+RESULTS:
+[[file:supp-fig-10.mito-msn.png]]
